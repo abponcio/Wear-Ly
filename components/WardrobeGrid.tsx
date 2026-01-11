@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, FlatList, Dimensions } from 'react-native';
+import { View, Text, FlatList, Dimensions, RefreshControl } from 'react-native';
 import { Package } from 'lucide-react-native';
 import ItemCard from '@/components/ui/ItemCard';
 import { WardrobeItem } from '@/types/wardrobe';
@@ -8,6 +8,7 @@ interface WardrobeGridProps {
   items: WardrobeItem[];
   onItemPress?: (item: WardrobeItem) => void;
   loading?: boolean;
+  refreshControl?: React.ReactElement<typeof RefreshControl>;
 }
 
 const { width } = Dimensions.get('window');
@@ -16,7 +17,7 @@ const CARD_PADDING = 16;
 const NUM_COLUMNS = 2;
 const CARD_WIDTH = (width - CARD_PADDING * 2 - CARD_MARGIN) / NUM_COLUMNS;
 
-export default function WardrobeGrid({ items, onItemPress, loading = false }: WardrobeGridProps) {
+export default function WardrobeGrid({ items, onItemPress, loading = false, refreshControl }: WardrobeGridProps) {
   if (loading) {
     return (
       <View className="flex-1 justify-center items-center p-8">
@@ -60,6 +61,7 @@ export default function WardrobeGrid({ items, onItemPress, loading = false }: Wa
         </View>
       )}
       showsVerticalScrollIndicator={false}
+      refreshControl={refreshControl}
     />
   );
 }

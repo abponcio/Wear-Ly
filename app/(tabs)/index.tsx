@@ -1,15 +1,16 @@
 import React from "react";
-import { View, Text, SafeAreaView, RefreshControl, ScrollView } from "react-native";
+import { View, Text, SafeAreaView, RefreshControl } from "react-native";
+import { useRouter } from "expo-router";
 import WardrobeGrid from "@/components/WardrobeGrid";
 import { useWardrobe } from "@/hooks/useWardrobe";
 import type { WardrobeItem } from "@/types/wardrobe";
 
 export default function WardrobeScreen() {
+  const router = useRouter();
   const { items, isLoading, error, refreshItems } = useWardrobe();
 
   const handleItemPress = (item: WardrobeItem) => {
-    // TODO: Navigate to item detail screen
-    console.log("Item pressed:", item.id);
+    router.push(`/item/${item.id}`);
   };
 
   return (
@@ -35,6 +36,9 @@ export default function WardrobeScreen() {
           items={items}
           onItemPress={handleItemPress}
           loading={isLoading}
+          refreshControl={
+            <RefreshControl refreshing={isLoading} onRefresh={refreshItems} />
+          }
         />
       </View>
     </SafeAreaView>
