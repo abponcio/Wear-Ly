@@ -9,7 +9,8 @@
       "ios": {
         "simulator": true,
         "buildConfiguration": "Debug",
-        "image": "latest"
+        "image": "latest",
+        "xcode": "16.2.0"
       },
       "android": {
         "buildType": "apk"
@@ -19,7 +20,8 @@
     "preview": {
       "distribution": "internal",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "xcode": "16.2.0"
       },
       "android": {
         "buildType": "apk"
@@ -28,7 +30,8 @@
     },
     "production": {
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "xcode": "16.2.0"
       },
       "android": {
         "buildType": "app-bundle"
