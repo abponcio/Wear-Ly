@@ -3,17 +3,17 @@
  * Orchestrates the complete upload workflow: Gemini analysis, background removal, and Supabase storage
  */
 
-import { useState, useCallback } from 'react';
-import { processImageWithGemini } from '@/services/gemini';
-import { removeBackground } from '@/services/photoroom';
+import { useState, useCallback } from "react";
+import { processImageWithGemini } from "@/services/gemini";
+import { removeBackground } from "@/services/photoroom";
 import {
   supabase,
   uploadOriginalImage,
   uploadIsolatedImage,
   createItem,
   getCurrentUserId,
-} from '@/services/supabase';
-import type { WardrobeItem } from '@/types/wardrobe';
+} from "@/services/supabase";
+import type { WardrobeItem } from "@/types/wardrobe";
 
 interface UseUploadItemReturn {
   uploadItem: (imageUri: string) => Promise<WardrobeItem | null>;
@@ -42,39 +42,47 @@ export const useUploadItem = (): UseUploadItemReturn => {
         // Step 1: Get current user ID
         const userId = await getCurrentUserId();
         if (!userId) {
-          throw new Error('User not authenticated. Please sign in.');
+          throw new Error("User not authenticated. Please sign in.");
         }
 
         // Step 2: Analyze image with Gemini to get metadata
-        console.log('Analyzing image with Gemini...');
+        console.log("Analyzing image with Gemini...");
         const metadata = await processImageWithGemini(imageUri);
-        
+
         if (!metadata) {
-          throw new Error('Failed to analyze image. Please try again.');
+          throw new Error("Failed to analyze image. Please try again.");
         }
 
-        console.log('Metadata extracted:', metadata);
+        console.log("Metadata extracted:", metadata);
 
         // Step 3: Remove background using Photoroom
-        console.log('Removing background...');
+        console.log("Removing background...");
         const isolatedImageUri = await removeBackground(imageUri);
-        console.log('Background removed, isolated image:', isolatedImageUri);
+        console.log("Background removed, isolated image:", isolatedImageUri);
 
         // Step 4: Generate item ID
         const itemId = crypto.randomUUID();
 
         // Step 5: Upload original image to Supabase Storage
-        console.log('Uploading original image...');
-        const originalImageUrl = await uploadOriginalImage(userId, itemId, imageUri);
-        console.log('Original image uploaded:', originalImageUrl);
+        console.log("Uploading original image...");
+        const originalImageUrl = await uploadOriginalImage(
+          userId,
+          itemId,
+          imageUri
+        );
+        console.log("Original image uploaded:", originalImageUrl);
 
         // Step 6: Upload isolated image to Supabase Storage
-        console.log('Uploading isolated image...');
-        const isolatedImageUrl = await uploadIsolatedImage(userId, itemId, isolatedImageUri);
-        console.log('Isolated image uploaded:', isolatedImageUrl);
+        console.log("Uploading isolated image...");
+        const isolatedImageUrl = await uploadIsolatedImage(
+          userId,
+          itemId,
+          isolatedImageUri
+        );
+        console.log("Isolated image uploaded:", isolatedImageUrl);
 
         // Step 7: Save item metadata to database
-        console.log('Saving item to database...');
+        console.log("Saving item to database...");
         const itemData = {
           id: itemId,
           user_id: userId,
@@ -88,7 +96,7 @@ export const useUploadItem = (): UseUploadItemReturn => {
         };
 
         const createdItem = await createItem(itemData);
-        console.log('Item created successfully:', createdItem.id);
+        console.log("Item created successfully:", createdItem.id);
 
         // Step 8: Transform to WardrobeItem format and return
         const wardrobeItem: WardrobeItem = {
@@ -108,12 +116,13 @@ export const useUploadItem = (): UseUploadItemReturn => {
         setIsLoading(false);
         return wardrobeItem;
       } catch (err) {
-        console.error('Error uploading item:', err);
-        
-        const errorMessage = err instanceof Error 
-          ? err.message 
-          : 'An unexpected error occurred during upload';
-        
+        console.error("Error uploading item:", err);
+
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "An unexpected error occurred during upload";
+
         setError(errorMessage);
         setIsLoading(false);
         return null;

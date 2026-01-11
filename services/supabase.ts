@@ -69,7 +69,7 @@ export const uploadImage = async (
 
     // Get public URL
     const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
-    
+
     if (!urlData?.publicUrl) {
       throw new Error('Failed to get public URL for uploaded image');
     }

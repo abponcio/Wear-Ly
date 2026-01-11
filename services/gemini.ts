@@ -41,13 +41,13 @@ const extractJSONFromResponse = (response: string): string => {
   if (jsonMatch) {
     return jsonMatch[1].trim();
   }
-  
+
   // Try to find JSON object in response
   const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
   if (jsonObjectMatch) {
     return jsonObjectMatch[0];
   }
-  
+
   return response.trim();
 };
 
@@ -65,7 +65,7 @@ export const processImageWithGemini = async (
 
     // Convert image to base64
     const base64Image = await imageToBase64(imageUri);
-    
+
     // Get file extension to determine MIME type
     const mimeType = imageUri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
 
@@ -103,7 +103,7 @@ Important:
 
     // Extract JSON from response
     const jsonString = extractJSONFromResponse(text);
-    
+
     // Parse JSON
     let parsedData: unknown;
     try {
@@ -116,7 +116,7 @@ Important:
 
     // Validate with Zod schema
     const validationResult = WardrobeItemMetadataSchema.safeParse(parsedData);
-    
+
     if (!validationResult.success) {
       console.error('Validation failed:', validationResult.error);
       console.error('Parsed data:', parsedData);
@@ -126,7 +126,7 @@ Important:
     return validationResult.data;
   } catch (error) {
     console.error('Error processing image with Gemini:', error);
-    
+
     // Handle specific error types
     if (error instanceof Error) {
       if (error.message.includes('API_KEY')) {
@@ -137,7 +137,7 @@ Important:
         console.error('Network error connecting to Gemini API');
       }
     }
-    
+
     return null;
   }
 };
@@ -199,7 +199,7 @@ Important:
 
     // Extract JSON from response
     const jsonString = extractJSONFromResponse(text);
-    
+
     // Parse JSON
     let parsedData: unknown;
     try {
@@ -212,7 +212,7 @@ Important:
 
     // Validate with Zod schema
     const validationResult = OutfitSuggestionSchema.safeParse(parsedData);
-    
+
     if (!validationResult.success) {
       console.error('Validation failed:', validationResult.error);
       console.error('Parsed data:', parsedData);
@@ -222,7 +222,7 @@ Important:
     return validationResult.data;
   } catch (error) {
     console.error('Error generating outfit with Gemini:', error);
-    
+
     if (error instanceof Error) {
       if (error.message.includes('API_KEY')) {
         console.error('Invalid or missing Gemini API key');
@@ -230,7 +230,7 @@ Important:
         console.error('Gemini API quota exceeded');
       }
     }
-    
+
     return null;
   }
 };
