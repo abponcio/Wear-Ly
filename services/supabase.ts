@@ -3,11 +3,11 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system';
 import type { Database } from '@/types/database';
 import type { ItemInsert, ItemRow } from '@/types/database';
 import type { WardrobeItem } from '@/types/wardrobe';
+import { supabaseStorage } from '@/lib/supabase-storage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -21,7 +21,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
  */
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: SecureStore,
+    storage: supabaseStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
