@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
+import { Image } from "expo-image";
 import { LogIn, Mail, Lock } from "lucide-react-native";
 import { supabase } from "@/services/supabase";
 
@@ -60,8 +61,16 @@ export default function SignInScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View className="items-center mb-8">
-            <LogIn size={64} color="#6366F1" />
-            <Text className="text-3xl font-bold text-gray-900 mt-4">
+            {/* Logo */}
+            <View className="mb-4">
+              <Image
+                source={require("@/assets/logo.png")}
+                contentFit="contain"
+                style={{ width: 120, height: 120 }}
+                transition={200}
+              />
+            </View>
+            <Text className="text-3xl font-bold text-gray-900 mt-2">
               Welcome Back
             </Text>
             <Text className="text-gray-500 text-center mt-2">

@@ -1,6 +1,13 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const { withNativeWind } = require('nativewind/metro');
 
+// Polyfill for toReversed if not available (for Node.js < 22)
+if (!Array.prototype.toReversed) {
+  Array.prototype.toReversed = function() {
+    return [...this].reverse();
+  };
+}
+
 const config = getDefaultConfig(__dirname);
 
 // Optimize file watching to prevent "too many open files" error

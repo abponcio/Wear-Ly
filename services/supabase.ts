@@ -253,14 +253,21 @@ export const deleteItem = async (itemId: string): Promise<boolean> => {
       // This is more reliable if URL parsing fails
       try {
         const folderPath = `${userId}/${itemId}`;
-        await supabase.storage.from("wardrobe-images").remove([`${folderPath}/original.jpg`, `${folderPath}/original.png`]);
-        await supabase.storage.from("isolated-images").remove([`${folderPath}/isolated.png`]);
+        await supabase.storage
+          .from("wardrobe-images")
+          .remove([`${folderPath}/original.jpg`, `${folderPath}/original.png`]);
+        await supabase.storage
+          .from("isolated-images")
+          .remove([`${folderPath}/isolated.png`]);
       } catch (folderError) {
         console.warn("Error deleting by folder path:", folderError);
         // Continue with database deletion
       }
     } catch (storageError) {
-      console.warn("Storage deletion errors (continuing with DB deletion):", storageError);
+      console.warn(
+        "Storage deletion errors (continuing with DB deletion):",
+        storageError
+      );
       // Continue with database deletion even if storage deletion fails
     }
 

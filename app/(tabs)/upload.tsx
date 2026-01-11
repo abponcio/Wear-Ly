@@ -9,13 +9,21 @@ import {
   ActivityIndicator,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, Image as ImageIcon, Upload, X } from "lucide-react-native";
+import { Camera, Image as ImageIcon, Upload, X, CheckCircle2, Loader2 } from "lucide-react-native";
 import { useUploadItem } from "@/hooks/useUploadItem";
 import { useWardrobe } from "@/hooks/useWardrobe";
 import { Image } from "expo-image";
 
+const UPLOAD_STEPS = {
+  analyzing: { label: "Analyzing item...", icon: Loader2 },
+  "removing-background": { label: "Removing background...", icon: Loader2 },
+  "uploading-images": { label: "Uploading images...", icon: Loader2 },
+  saving: { label: "Saving to wardrobe...", icon: Loader2 },
+  complete: { label: "Complete!", icon: CheckCircle2 },
+};
+
 export default function UploadScreen() {
-  const { uploadItem, isLoading, error, resetError } = useUploadItem();
+  const { uploadItem, isLoading, currentStep, error, resetError } = useUploadItem();
   const { refreshItems } = useWardrobe();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -183,10 +191,47 @@ export default function UploadScreen() {
                 )}
               </Pressable>
 
-              {isLoading && (
-                <Text className="text-gray-500 text-xs text-center mt-2">
-                  Analyzing image, removing background, and uploading...
-                </Text>
+              {/* Progress Steps */}
+              {isLoading && currentStep !== 'idle' && (
+                <View className="mt-4 gap-2">
+                  {Object.entries(UPLOAD_STEPS).map(([step, { label, icon: Icon }]) => {
+                    const stepOrder = ['analyzing', 'removing-background', 'uploading-images', 'saving', 'complete'];
+                    const currentIndex = stepOrder.indexOf(currentStep);
+                    const stepIndex = stepOrder.indexOf(step);
+
+                    const isActive = currentStep === step;
+                    const isComplete = currentStep === 'complete' || (currentIndex > stepIndex && step !== 'complete');
+                    const isPending = stepIndex > currentIndex;
+
+                    return (
+                      <View
+                        key={step}
+                        className={`flex-row items-center gap-2 p-2 rounded-lg ${
+                          isActive ? 'bg-indigo-50' : isComplete ? 'bg-green-50' : 'bg-gray-50'
+                        }`}
+                      >
+                        {isActive && step !== 'complete' ? (
+                          <Loader2 size={16} color="#6366F1" />
+                        ) : isComplete ? (
+                          <CheckCircle2 size={16} color="#22C55E" />
+                        ) : (
+                          <Icon size={16} color="#9CA3AF" />
+                        )}
+                        <Text
+                          className={`text-xs ${
+                            isActive
+                              ? 'text-indigo-700 font-medium'
+                              : isComplete
+                              ? 'text-green-700'
+                              : 'text-gray-500'
+                          }`}
+                        >
+                          {label}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
               )}
             </View>
           )}
@@ -194,7 +239,23 @@ export default function UploadScreen() {
           {/* Error Message */}
           {error && (
             <View className="bg-red-50 border border-red-200 mt-4 p-3 rounded-lg">
-              <Text className="text-red-700 text-sm">{error}</Text>
+              <View className="flex-row items-start gap-2">
+                <Text className="text-red-700 text-sm flex-1">{error}</Text>
+                <Pressable
+                  onPress={resetError}
+                  className="ml-2"
+                >
+                  <X size={16} color="#DC2626" />
+                </Pressable>
+              </View>
+              <Pressable
+                onPress={() => selectedImage && handleUpload()}
+                className="mt-2 pt-2 border-t border-red-200"
+              >
+                <Text className="text-red-700 text-sm font-semibold text-center">
+                  Try Again
+                </Text>
+              </Pressable>
             </View>
           )}
 

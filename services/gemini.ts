@@ -61,7 +61,9 @@ export const processImageWithGemini = async (
 ): Promise<WardrobeItemMetadata | null> => {
   try {
     const genAI = getGeminiClient();
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // Use gemini-1.5-pro for image analysis (supports images)
+    // If this fails, try: 'gemini-pro-vision' or check available models
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     // Convert image to base64
     const base64Image = await imageToBase64(imageUri);
@@ -154,7 +156,8 @@ export const generateOutfit = async (
 ): Promise<OutfitSuggestion | null> => {
   try {
     const genAI = getGeminiClient();
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    // Use gemini-pro for outfit generation
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
     // Format wardrobe items for prompt
     const itemsJSON = JSON.stringify(

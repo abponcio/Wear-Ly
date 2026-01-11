@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, FlatList, Dimensions, RefreshControl } from 'react-native';
+import { View, Text, FlatList, Dimensions, RefreshControl, ScrollView } from 'react-native';
 import { Package } from 'lucide-react-native';
 import ItemCard from '@/components/ui/ItemCard';
+import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
 import { WardrobeItem } from '@/types/wardrobe';
 
 interface WardrobeGridProps {
@@ -18,25 +19,35 @@ const NUM_COLUMNS = 2;
 const CARD_WIDTH = (width - CARD_PADDING * 2 - CARD_MARGIN) / NUM_COLUMNS;
 
 export default function WardrobeGrid({ items, onItemPress, loading = false, refreshControl }: WardrobeGridProps) {
-  if (loading) {
+  if (loading && items.length === 0) {
     return (
-      <View className="flex-1 justify-center items-center p-8">
-        <Text className="text-gray-500 text-base">Loading your wardrobe...</Text>
-      </View>
+      <ScrollView
+        contentContainerStyle={{ paddingVertical: 16 }}
+        refreshControl={refreshControl}
+      >
+        <LoadingSkeleton count={6} />
+      </ScrollView>
     );
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !loading) {
     return (
-      <View className="flex-1 justify-center items-center p-8">
-        <Package size={48} color="#9CA3AF" />
-        <Text className="text-gray-600 text-lg font-semibold mt-4 mb-2">
-          Your wardrobe is empty
-        </Text>
-        <Text className="text-gray-500 text-center text-sm">
-          Start adding items to build your virtual closet
-        </Text>
-      </View>
+      <ScrollView
+        contentContainerClassName="flex-1 justify-center items-center p-8"
+        refreshControl={refreshControl}
+      >
+        <View className="items-center">
+          <View className="bg-indigo-100 rounded-full p-6 mb-4">
+            <Package size={48} color="#6366F1" />
+          </View>
+          <Text className="text-gray-900 text-xl font-bold mt-4 mb-2">
+            Your wardrobe is empty
+          </Text>
+          <Text className="text-gray-500 text-center text-sm max-w-xs">
+            Start adding items to build your AI-powered virtual closet
+          </Text>
+        </View>
+      </ScrollView>
     );
   }
 

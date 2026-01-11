@@ -3,9 +3,17 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { getUserItems, getCurrentUserId, deleteItem as deleteItemService } from "@/services/supabase";
+import {
+  getUserItems,
+  getCurrentUserId,
+  deleteItem as deleteItemService,
+} from "@/services/supabase";
 import { generateOutfit } from "@/services/gemini";
-import type { WardrobeItem, OutfitContext, OutfitSuggestion } from "@/types/wardrobe";
+import type {
+  WardrobeItem,
+  OutfitContext,
+  OutfitSuggestion,
+} from "@/types/wardrobe";
 
 interface UseWardrobeReturn {
   items: WardrobeItem[];
@@ -46,9 +54,7 @@ export const useWardrobe = (): UseWardrobeReturn => {
       setItems(userItems);
     } catch (err) {
       const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Failed to load wardrobe items";
+        err instanceof Error ? err.message : "Failed to load wardrobe items";
       setError(errorMessage);
       console.error("Error fetching wardrobe items:", err);
     } finally {
@@ -60,33 +66,34 @@ export const useWardrobe = (): UseWardrobeReturn => {
     fetchItems();
   }, [fetchItems]);
 
-  const deleteItem = useCallback(async (itemId: string): Promise<void> => {
-    try {
-      // Optimistic UI update - remove item from list immediately
-      setItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
+  const deleteItem = useCallback(
+    async (itemId: string): Promise<void> => {
+      try {
+        // Optimistic UI update - remove item from list immediately
+        setItems((prevItems) => prevItems.filter((item) => item.id !== itemId));
 
-      // Delete from database and storage
-      const success = await deleteItemService(itemId);
+        // Delete from database and storage
+        const success = await deleteItemService(itemId);
 
-      if (!success) {
-        // If deletion failed, refresh to restore the item
+        if (!success) {
+          // If deletion failed, refresh to restore the item
+          await fetchItems();
+          throw new Error("Failed to delete item");
+        }
+
+        // Refresh to ensure consistency
         await fetchItems();
-        throw new Error("Failed to delete item");
+      } catch (err) {
+        // Restore item on error
+        await fetchItems();
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to delete item";
+        setError(errorMessage);
+        throw err; // Re-throw to allow caller to handle
       }
-
-      // Refresh to ensure consistency
-      await fetchItems();
-    } catch (err) {
-      // Restore item on error
-      await fetchItems();
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Failed to delete item";
-      setError(errorMessage);
-      throw err; // Re-throw to allow caller to handle
-    }
-  }, [fetchItems]);
+    },
+    [fetchItems]
+  );
 
   return {
     items,
@@ -105,13 +112,16 @@ export const useOutfitGeneration = (
 ): UseOutfitGenerationReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentOutfit, setCurrentOutfit] =
-    useState<OutfitSuggestion | null>(null);
+  const [currentOutfit, setCurrentOutfit] = useState<OutfitSuggestion | null>(
+    null
+  );
 
   const generateOutfitSuggestion = useCallback(
     async (context: OutfitContext): Promise<OutfitSuggestion | null> => {
       if (wardrobeItems.length < 3) {
-        setError("You need at least 3 items in your wardrobe to generate an outfit");
+        setError(
+          "You need at least 3 items in your wardrobe to generate an outfit"
+        );
         return null;
       }
 

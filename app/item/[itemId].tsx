@@ -11,7 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import {
-  ArrowLeft,
+  ChevronLeft,
   Trash2,
   Shirt,
   Palette,
@@ -95,12 +95,13 @@ export default function ItemDetailScreen() {
       <View className="bg-white px-4 py-3 border-b border-gray-200 flex-row items-center justify-between">
         <Pressable
           onPress={() => router.back()}
-          className="flex-row items-center"
+          className="flex-row items-center gap-2"
         >
-          <ArrowLeft size={24} color="#374151" />
+          <ChevronLeft size={24} color="#374151" />
+          <Text className="text-base font-medium text-gray-700">Back</Text>
         </Pressable>
         <Text className="text-lg font-semibold text-gray-900">Item Details</Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 80 }} />
       </View>
 
       <ScrollView className="flex-1">
