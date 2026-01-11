@@ -15,6 +15,9 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: 'com.ootdai.app',
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
+      },
     },
     android: {
       adaptiveIcon: {
