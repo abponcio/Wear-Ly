@@ -5,8 +5,13 @@
 import { createClient } from "@supabase/supabase-js";
 import * as FileSystem from "expo-file-system";
 import type { Database } from "@/types/database";
-import type { ItemInsert, ItemRow } from "@/types/database";
-import type { WardrobeItem } from "@/types/wardrobe";
+import type {
+  ItemInsert,
+  ItemRow,
+  OutfitInsert,
+  OutfitRow,
+} from "@/types/database";
+import type { WardrobeItem, Outfit } from "@/types/wardrobe";
 import { supabaseStorage } from "@/lib/supabase-storage";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -287,4 +292,113 @@ export const deleteItem = async (itemId: string): Promise<boolean> => {
     console.error("Error in deleteItem:", error);
     throw error;
   }
+};
+
+// ==================== OUTFIT FUNCTIONS ====================
+
+/**
+ * Saves an outfit to the database
+ * @param outfitData - Outfit data to save
+ * @returns Created outfit row
+ */
+export const saveOutfit = async (outfitData: {
+  itemIds: string[];
+  occasion?: string;
+  weather?: string;
+  suggestion?: string;
+}): Promise<Outfit> => {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+
+  const insertData: OutfitInsert = {
+    user_id: userId,
+    item_ids: outfitData.itemIds,
+    occasion: outfitData.occasion || null,
+    weather: outfitData.weather || null,
+    gemini_suggestion: outfitData.suggestion || null,
+  };
+
+  const { data, error } = await supabase
+    .from("outfits")
+    .insert(insertData)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error saving outfit:", error);
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Failed to save outfit: no data returned");
+  }
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    itemIds: data.item_ids,
+    occasion: data.occasion || undefined,
+    weather: data.weather || undefined,
+    geminiSuggestion: data.gemini_suggestion || undefined,
+    createdAt: data.created_at,
+  };
+};
+
+/**
+ * Fetches all saved outfits for the current user
+ * @returns Array of outfits (without populated items)
+ */
+export const getUserOutfits = async (): Promise<Outfit[]> => {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+
+  const { data, error } = await supabase
+    .from("outfits")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching user outfits:", error);
+    throw error;
+  }
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    userId: row.user_id,
+    itemIds: row.item_ids,
+    occasion: row.occasion || undefined,
+    weather: row.weather || undefined,
+    geminiSuggestion: row.gemini_suggestion || undefined,
+    createdAt: row.created_at,
+  }));
+};
+
+/**
+ * Deletes an outfit from the database
+ * @param outfitId - Outfit ID to delete
+ * @returns true if deletion was successful
+ */
+export const deleteOutfit = async (outfitId: string): Promise<boolean> => {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+
+  const { error } = await supabase
+    .from("outfits")
+    .delete()
+    .eq("id", outfitId)
+    .eq("user_id", userId); // Extra safety: ensure user owns the outfit
+
+  if (error) {
+    console.error("Error deleting outfit:", error);
+    throw error;
+  }
+
+  return true;
 };

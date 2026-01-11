@@ -1,11 +1,11 @@
-import React from 'react';
-import { View, Dimensions } from 'react-native';
+import React from "react";
+import { View, Dimensions } from "react-native";
 
-const { width } = Dimensions.get('window');
-const CARD_MARGIN = 16;
-const CARD_PADDING = 16;
+const { width } = Dimensions.get("window");
+const CARD_GAP = 12;
+const CARD_PADDING = 20;
 const NUM_COLUMNS = 2;
-const CARD_WIDTH = (width - CARD_PADDING * 2 - CARD_MARGIN) / NUM_COLUMNS;
+const CARD_WIDTH = (width - CARD_PADDING * 2 - CARD_GAP) / NUM_COLUMNS;
 
 interface LoadingSkeletonProps {
   count?: number;
@@ -13,35 +13,29 @@ interface LoadingSkeletonProps {
 
 export default function LoadingSkeleton({ count = 6 }: LoadingSkeletonProps) {
   return (
-    <View className="flex-row flex-wrap justify-between px-4">
+    <View
+      className="flex-row flex-wrap justify-between"
+      style={{ paddingHorizontal: CARD_PADDING }}
+    >
       {Array.from({ length: count }).map((_, index) => (
         <View
           key={index}
-          style={{ width: CARD_WIDTH }}
-          className="mb-4 bg-white rounded-lg shadow-md overflow-hidden"
+          style={{ width: CARD_WIDTH, marginBottom: CARD_GAP }}
+          className="bg-white border border-cream-200 overflow-hidden"
         >
           {/* Image Skeleton */}
-          <View className="w-full aspect-square bg-gray-200 animate-pulse" />
+          <View className="w-full aspect-[3/4] bg-cream-200" />
 
           {/* Content Skeleton */}
           <View className="p-3">
-            {/* Category Badge */}
-            <View className="h-3 w-16 bg-gray-200 rounded-full mb-2 animate-pulse" />
+            {/* Category */}
+            <View className="h-2 w-12 bg-cream-200 mb-2" />
 
             {/* Subcategory */}
-            <View className="h-4 w-24 bg-gray-200 rounded mb-2 animate-pulse" />
+            <View className="h-3 w-20 bg-cream-200 mb-2" />
 
-            {/* Color & Material Tags */}
-            <View className="flex-row gap-2 mb-2">
-              <View className="h-5 w-16 bg-gray-200 rounded-full animate-pulse" />
-              <View className="h-5 w-20 bg-gray-200 rounded-full animate-pulse" />
-            </View>
-
-            {/* Attributes */}
-            <View className="flex-row gap-1">
-              <View className="h-4 w-12 bg-gray-200 rounded-full animate-pulse" />
-              <View className="h-4 w-14 bg-gray-200 rounded-full animate-pulse" />
-            </View>
+            {/* Color */}
+            <View className="h-2 w-10 bg-cream-200" />
           </View>
         </View>
       ))}

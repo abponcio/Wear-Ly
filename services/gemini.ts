@@ -19,16 +19,48 @@ const getGeminiClient = () => {
 
 /**
  * Converts a local image URI to base64 format for Gemini API
+ * Handles various URI formats from camera, gallery, and simulator
  */
 const imageToBase64 = async (imageUri: string): Promise<string> => {
   try {
-    const base64 = await FileSystem.readAsStringAsync(imageUri, {
+    // Normalize the URI - handle different formats
+    let normalizedUri = imageUri;
+
+    // Handle file:// prefix variations
+    if (!normalizedUri.startsWith('file://') && !normalizedUri.startsWith('http')) {
+      // If it's a relative path, try to read it as-is first
+      normalizedUri = normalizedUri;
+    }
+
+    // Check if file exists first
+    const fileInfo = await FileSystem.getInfoAsync(normalizedUri);
+
+    if (!fileInfo.exists) {
+      // Try with file:// prefix
+      if (!normalizedUri.startsWith('file://')) {
+        normalizedUri = `file://${normalizedUri}`;
+        const retryInfo = await FileSystem.getInfoAsync(normalizedUri);
+        if (!retryInfo.exists) {
+          throw new Error(`Image file not found at: ${imageUri}`);
+        }
+      } else {
+        throw new Error(`Image file not found at: ${imageUri}`);
+      }
+    }
+
+    const base64 = await FileSystem.readAsStringAsync(normalizedUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
+
+    if (!base64 || base64.length === 0) {
+      throw new Error('Image file is empty');
+    }
+
     return base64;
   } catch (error) {
     console.error('Error converting image to base64:', error);
-    throw new Error('Failed to read image file');
+    console.error('Image URI:', imageUri);
+    throw new Error(`Failed to read image file: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
 

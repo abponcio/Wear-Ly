@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,21 +6,12 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
-  SafeAreaView,
-} from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Image } from 'expo-image';
-import {
-  ChevronLeft,
-  Trash2,
-  Shirt,
-  Palette,
-  Tag,
-  Calendar,
-  Edit,
-} from 'lucide-react-native';
-import { useWardrobe } from '@/hooks/useWardrobe';
-import type { WardrobeItem } from '@/types/wardrobe';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Image } from "expo-image";
+import { ChevronLeft, Trash2 } from "lucide-react-native";
+import { useWardrobe } from "@/hooks/useWardrobe";
 
 export default function ItemDetailScreen() {
   const { itemId } = useLocalSearchParams<{ itemId: string }>();
@@ -32,8 +23,8 @@ export default function ItemDetailScreen() {
 
   useEffect(() => {
     if (!isLoadingWardrobe && !item) {
-      Alert.alert('Item Not Found', 'This item could not be found.', [
-        { text: 'OK', onPress: () => router.back() },
+      Alert.alert("Item Not Found", "This item could not be found.", [
+        { text: "OK", onPress: () => router.back() },
       ]);
     }
   }, [item, isLoadingWardrobe, router]);
@@ -42,29 +33,27 @@ export default function ItemDetailScreen() {
     if (!item) return;
 
     Alert.alert(
-      'Delete Item',
-      'Are you sure you want to delete this item from your wardrobe? This action cannot be undone.',
+      "Remove Item",
+      "Are you sure you want to remove this item from your closet?",
       [
         {
-          text: 'Cancel',
-          style: 'cancel',
+          text: "Cancel",
+          style: "cancel",
         },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: "Remove",
+          style: "destructive",
           onPress: async () => {
             setIsDeleting(true);
             try {
               await deleteItem(item.id);
-              Alert.alert('Success', 'Item deleted successfully.', [
-                { text: 'OK', onPress: () => router.back() },
+              Alert.alert("Removed", "Item has been removed.", [
+                { text: "OK", onPress: () => router.back() },
               ]);
             } catch (error) {
-              Alert.alert(
-                'Error',
-                'Failed to delete item. Please try again.',
-                [{ text: 'OK' }]
-              );
+              Alert.alert("Error", "Failed to remove item. Please try again.", [
+                { text: "OK" },
+              ]);
             } finally {
               setIsDeleting(false);
             }
@@ -76,38 +65,57 @@ export default function ItemDetailScreen() {
 
   if (isLoadingWardrobe) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
+      <SafeAreaView className="flex-1 bg-cream-100">
         <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#6366F1" />
-          <Text className="text-gray-500 mt-4">Loading item...</Text>
+          <ActivityIndicator size="small" color="#1A1A1A" />
+          <Text className="text-charcoal-muted text-xs tracking-wide uppercase mt-4">
+            Loading...
+          </Text>
         </View>
       </SafeAreaView>
     );
   }
 
   if (!item) {
-    return null; // Alert will handle navigation
+    return null;
   }
 
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-cream-100">
       {/* Header */}
-      <View className="bg-white px-4 py-3 border-b border-gray-200 flex-row items-center justify-between">
+      <View className="px-5 py-4 flex-row items-center justify-between bg-white border-b border-cream-200">
         <Pressable
           onPress={() => router.back()}
-          className="flex-row items-center gap-2"
+          className="p-2 -ml-2 active:opacity-50"
         >
-          <ChevronLeft size={24} color="#374151" />
-          <Text className="text-base font-medium text-gray-700">Back</Text>
+          <ChevronLeft size={24} color="#1A1A1A" strokeWidth={1.5} />
         </Pressable>
-        <Text className="text-lg font-semibold text-gray-900">Item Details</Text>
-        <View style={{ width: 80 }} />
+        <Pressable
+          onPress={handleDelete}
+          disabled={isDeleting}
+          className="p-2 -mr-2 active:opacity-50"
+        >
+          {isDeleting ? (
+            <ActivityIndicator size="small" color="#1A1A1A" />
+          ) : (
+            <Trash2 size={20} color="#1A1A1A" strokeWidth={1.5} />
+          )}
+        </Pressable>
       </View>
 
-      <ScrollView className="flex-1">
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         {/* Image Section */}
-        <View className="bg-white mb-2">
-          <View className="w-full aspect-square bg-gray-100">
+        <View className="bg-white">
+          <View className="w-full aspect-[3/4] bg-cream-100">
             <Image
               source={{ uri: item.isolatedImageUrl || item.imageUrl }}
               contentFit="contain"
@@ -118,49 +126,48 @@ export default function ItemDetailScreen() {
         </View>
 
         {/* Details Section */}
-        <View className="bg-white px-4 py-4 mb-2">
-          {/* Category & Subcategory */}
-          <View className="mb-4">
-            <View className="flex-row items-center mb-2">
-              <Shirt size={18} color="#6B7280" />
-              <Text className="text-xs font-semibold text-gray-600 uppercase tracking-wide ml-2">
-                {item.category}
-              </Text>
-            </View>
-            <Text className="text-2xl font-bold text-gray-900 mb-1">
-              {item.subcategory}
-            </Text>
-          </View>
+        <View className="px-5 py-6">
+          {/* Category */}
+          <Text className="text-xs tracking-widest text-charcoal-muted uppercase mb-2">
+            {item.category}
+          </Text>
 
-          {/* Color & Material */}
-          <View className="flex-row flex-wrap gap-3 mb-4">
-            <View className="flex-row items-center bg-blue-50 px-3 py-2 rounded-lg">
-              <Palette size={16} color="#3B82F6" />
-              <Text className="text-sm text-blue-700 font-medium ml-2">
-                {item.color}
+          {/* Subcategory */}
+          <Text className="text-2xl font-light text-charcoal tracking-wide mb-6">
+            {item.subcategory}
+          </Text>
+
+          {/* Details Grid */}
+          <View className="flex-row gap-4 mb-6">
+            <View className="flex-1 border border-cream-300 p-4 bg-white">
+              <Text className="text-[10px] tracking-widest text-charcoal-muted uppercase mb-1">
+                Color
               </Text>
+              <Text className="text-charcoal text-sm">{item.color}</Text>
             </View>
-            <View className="flex-row items-center bg-purple-50 px-3 py-2 rounded-lg">
-              <Tag size={16} color="#9333EA" />
-              <Text className="text-sm text-purple-700 font-medium ml-2">
-                {item.material}
+            <View className="flex-1 border border-cream-300 p-4 bg-white">
+              <Text className="text-[10px] tracking-widest text-charcoal-muted uppercase mb-1">
+                Material
               </Text>
+              <Text className="text-charcoal text-sm">{item.material}</Text>
             </View>
           </View>
 
           {/* Attributes */}
           {item.attributes && item.attributes.length > 0 && (
-            <View className="mb-4">
-              <Text className="text-sm font-semibold text-gray-700 mb-2">
-                Attributes
+            <View className="mb-6">
+              <Text className="text-xs tracking-widest text-charcoal-muted uppercase mb-3">
+                Style Tags
               </Text>
               <View className="flex-row flex-wrap gap-2">
                 {item.attributes.map((attr, index) => (
                   <View
                     key={index}
-                    className="bg-gray-100 px-3 py-1.5 rounded-full"
+                    className="border border-charcoal/20 px-3 py-2"
                   >
-                    <Text className="text-sm text-gray-700">{attr}</Text>
+                    <Text className="text-xs text-charcoal capitalize">
+                      {attr}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -168,48 +175,11 @@ export default function ItemDetailScreen() {
           )}
 
           {/* Date Added */}
-          <View className="flex-row items-center pt-4 border-t border-gray-200">
-            <Calendar size={16} color="#6B7280" />
-            <Text className="text-xs text-gray-500 ml-2">
-              Added {new Date(item.createdAt).toLocaleDateString()}
+          <View className="pt-6 border-t border-cream-200">
+            <Text className="text-xs text-charcoal-muted">
+              Added {formatDate(item.createdAt)}
             </Text>
           </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View className="px-4 pb-4 gap-3">
-          {/* Delete Button */}
-          <Pressable
-            onPress={handleDelete}
-            disabled={isDeleting}
-            className={`flex-row items-center justify-center py-3 rounded-lg border-2 ${
-              isDeleting
-                ? 'bg-gray-100 border-gray-300'
-                : 'bg-white border-red-500 active:bg-red-50'
-            }`}
-          >
-            {isDeleting ? (
-              <ActivityIndicator color="#EF4444" />
-            ) : (
-              <>
-                <Trash2 size={20} color="#EF4444" />
-                <Text className="text-red-600 font-semibold ml-2">
-                  Delete Item
-                </Text>
-              </>
-            )}
-          </Pressable>
-
-          {/* Edit Button (Future) */}
-          <Pressable
-            onPress={() => {
-              Alert.alert('Coming Soon', 'Edit functionality will be available soon.');
-            }}
-            className="flex-row items-center justify-center py-3 rounded-lg bg-white border-2 border-gray-300 active:bg-gray-50"
-          >
-            <Edit size={20} color="#6B7280" />
-            <Text className="text-gray-700 font-semibold ml-2">Edit Item</Text>
-          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>

@@ -2,28 +2,29 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  SafeAreaView,
   ScrollView,
   Pressable,
   Alert,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, Image as ImageIcon, Upload, X, CheckCircle2, Loader2 } from "lucide-react-native";
+import { Camera, Image as ImageIcon, X, Check } from "lucide-react-native";
 import { useUploadItem } from "@/hooks/useUploadItem";
 import { useWardrobe } from "@/hooks/useWardrobe";
 import { Image } from "expo-image";
 
-const UPLOAD_STEPS = {
-  analyzing: { label: "Analyzing item...", icon: Loader2 },
-  "removing-background": { label: "Removing background...", icon: Loader2 },
-  "uploading-images": { label: "Uploading images...", icon: Loader2 },
-  saving: { label: "Saving to wardrobe...", icon: Loader2 },
-  complete: { label: "Complete!", icon: CheckCircle2 },
-};
+const UPLOAD_STEPS = [
+  { key: "analyzing", label: "Analyzing" },
+  { key: "removing-background", label: "Processing" },
+  { key: "uploading-images", label: "Uploading" },
+  { key: "saving", label: "Saving" },
+  { key: "complete", label: "Complete" },
+];
 
 export default function UploadScreen() {
-  const { uploadItem, isLoading, currentStep, error, resetError } = useUploadItem();
+  const { uploadItem, isLoading, currentStep, error, resetError } =
+    useUploadItem();
   const { refreshItems } = useWardrobe();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
@@ -53,16 +54,16 @@ export default function UploadScreen() {
 
       if (source === "camera") {
         result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          mediaTypes: ["images"],
           allowsEditing: true,
-          aspect: [1, 1],
+          aspect: [3, 4],
           quality: 0.8,
         });
       } else {
         result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          mediaTypes: ["images"],
           allowsEditing: true,
-          aspect: [1, 1],
+          aspect: [3, 4],
           quality: 0.8,
         });
       }
@@ -92,9 +93,8 @@ export default function UploadScreen() {
     if (item) {
       setUploadSuccess(true);
       setSelectedImage(null);
-      // Refresh wardrobe items
       await refreshItems();
-      Alert.alert("Success", "Item uploaded successfully!");
+      Alert.alert("Added", "Item has been added to your closet.");
     }
   };
 
@@ -104,63 +104,67 @@ export default function UploadScreen() {
     resetError();
   };
 
+  const getCurrentStepIndex = () => {
+    return UPLOAD_STEPS.findIndex((s) => s.key === currentStep);
+  };
+
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <ScrollView className="flex-1">
-        {/* Header */}
-        <View className="bg-white px-4 py-4 border-b border-gray-200">
-          <View className="flex-row items-center gap-2 mb-2">
-            <Upload size={24} color="#6366F1" />
-            <Text className="text-2xl font-bold text-gray-900">Upload Item</Text>
-          </View>
-          <Text className="text-sm text-gray-500">
-            Add a new item to your wardrobe with AI-powered analysis
+    <SafeAreaView className="flex-1 bg-cream-100" edges={["bottom"]}>
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        {/* Minimal Header */}
+        <View className="px-5 pt-2 pb-6">
+          <Text className="text-xs tracking-widest text-charcoal-muted uppercase mb-2">
+            Add to closet
+          </Text>
+          <Text className="text-charcoal text-sm leading-5">
+            Photograph your item for AI analysis
           </Text>
         </View>
 
         {/* Image Selection */}
-        <View className="px-4 py-4">
+        <View className="px-5">
           {!selectedImage ? (
-            <View className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-8 items-center">
-              <ImageIcon size={48} color="#9CA3AF" />
-              <Text className="text-gray-600 font-medium mt-4 mb-2">
+            <View className="border border-cream-300 bg-white p-8 items-center">
+              <ImageIcon size={32} color="#6B6B6B" strokeWidth={1} />
+              <Text className="text-charcoal-muted text-xs tracking-wide uppercase mt-6 mb-8">
                 No image selected
-              </Text>
-              <Text className="text-gray-500 text-sm text-center mb-4">
-                Choose an image to analyze and add to your wardrobe
               </Text>
 
               <View className="flex-row gap-3 w-full">
                 <Pressable
                   onPress={() => pickImage("camera")}
-                  className="flex-1 bg-indigo-600 py-3 rounded-lg flex-row items-center justify-center gap-2 active:bg-indigo-700"
+                  className="flex-1 bg-charcoal py-4 flex-row items-center justify-center gap-2 active:opacity-80"
                 >
-                  <Camera size={20} color="#FFFFFF" />
-                  <Text className="text-white font-semibold">Camera</Text>
+                  <Camera size={18} color="#FFFFFF" strokeWidth={1.5} />
+                  <Text className="text-white text-xs tracking-widest uppercase">
+                    Camera
+                  </Text>
                 </Pressable>
 
                 <Pressable
                   onPress={() => pickImage("library")}
-                  className="flex-1 bg-gray-700 py-3 rounded-lg flex-row items-center justify-center gap-2 active:bg-gray-800"
+                  className="flex-1 border border-charcoal py-4 flex-row items-center justify-center gap-2 active:opacity-80"
                 >
-                  <ImageIcon size={20} color="#FFFFFF" />
-                  <Text className="text-white font-semibold">Gallery</Text>
+                  <ImageIcon size={18} color="#1A1A1A" strokeWidth={1.5} />
+                  <Text className="text-charcoal text-xs tracking-widest uppercase">
+                    Library
+                  </Text>
                 </Pressable>
               </View>
             </View>
           ) : (
-            <View className="bg-white rounded-lg p-4">
+            <View className="bg-white">
               <View className="relative">
                 <Image
                   source={{ uri: selectedImage }}
                   contentFit="cover"
-                  className="w-full aspect-square rounded-lg"
+                  className="w-full aspect-[3/4]"
                 />
                 <Pressable
                   onPress={clearSelection}
-                  className="absolute top-2 right-2 bg-black/50 rounded-full p-2"
+                  className="absolute top-4 right-4 bg-white/90 p-2 active:opacity-80"
                 >
-                  <X size={20} color="#FFFFFF" />
+                  <X size={20} color="#1A1A1A" strokeWidth={1.5} />
                 </Pressable>
               </View>
 
@@ -168,69 +172,71 @@ export default function UploadScreen() {
               <Pressable
                 onPress={handleUpload}
                 disabled={isLoading}
-                className={`mt-4 py-3 rounded-lg flex-row items-center justify-center gap-2 ${
-                  isLoading
-                    ? "bg-gray-300"
-                    : "bg-indigo-600 active:bg-indigo-700"
+                className={`py-4 flex-row items-center justify-center gap-2 ${
+                  isLoading ? "bg-cream-200" : "bg-charcoal active:opacity-80"
                 }`}
               >
                 {isLoading ? (
                   <>
-                    <ActivityIndicator color="#FFFFFF" />
-                    <Text className="text-white font-semibold">
+                    <ActivityIndicator color="#1A1A1A" size="small" />
+                    <Text className="text-charcoal text-xs tracking-widest uppercase">
                       Processing...
                     </Text>
                   </>
                 ) : (
-                  <>
-                    <Upload size={20} color="#FFFFFF" />
-                    <Text className="text-white font-semibold text-base">
-                      Upload & Analyze
-                    </Text>
-                  </>
+                  <Text className="text-white text-xs tracking-widest uppercase">
+                    Add to Closet
+                  </Text>
                 )}
               </Pressable>
 
               {/* Progress Steps */}
-              {isLoading && currentStep !== 'idle' && (
-                <View className="mt-4 gap-2">
-                  {Object.entries(UPLOAD_STEPS).map(([step, { label, icon: Icon }]) => {
-                    const stepOrder = ['analyzing', 'removing-background', 'uploading-images', 'saving', 'complete'];
-                    const currentIndex = stepOrder.indexOf(currentStep);
-                    const stepIndex = stepOrder.indexOf(step);
+              {isLoading && currentStep !== "idle" && (
+                <View className="p-4 border-t border-cream-200">
+                  <View className="flex-row justify-between">
+                    {UPLOAD_STEPS.map((step, index) => {
+                      const currentIndex = getCurrentStepIndex();
+                      const isActive = currentStep === step.key;
+                      const isComplete = currentIndex > index;
 
-                    const isActive = currentStep === step;
-                    const isComplete = currentStep === 'complete' || (currentIndex > stepIndex && step !== 'complete');
-                    const isPending = stepIndex > currentIndex;
-
-                    return (
-                      <View
-                        key={step}
-                        className={`flex-row items-center gap-2 p-2 rounded-lg ${
-                          isActive ? 'bg-indigo-50' : isComplete ? 'bg-green-50' : 'bg-gray-50'
-                        }`}
-                      >
-                        {isActive && step !== 'complete' ? (
-                          <Loader2 size={16} color="#6366F1" />
-                        ) : isComplete ? (
-                          <CheckCircle2 size={16} color="#22C55E" />
-                        ) : (
-                          <Icon size={16} color="#9CA3AF" />
-                        )}
-                        <Text
-                          className={`text-xs ${
-                            isActive
-                              ? 'text-indigo-700 font-medium'
-                              : isComplete
-                              ? 'text-green-700'
-                              : 'text-gray-500'
-                          }`}
-                        >
-                          {label}
-                        </Text>
-                      </View>
-                    );
-                  })}
+                      return (
+                        <View key={step.key} className="items-center flex-1">
+                          <View
+                            className={`w-6 h-6 rounded-full items-center justify-center mb-2 ${
+                              isActive
+                                ? "bg-gold"
+                                : isComplete
+                                ? "bg-charcoal"
+                                : "bg-cream-200"
+                            }`}
+                          >
+                            {isComplete ? (
+                              <Check size={12} color="#FFFFFF" />
+                            ) : (
+                              <Text
+                                className={`text-xs ${
+                                  isActive ? "text-white" : "text-charcoal-muted"
+                                }`}
+                              >
+                                {index + 1}
+                              </Text>
+                            )}
+                          </View>
+                          <Text
+                            className={`text-[9px] tracking-wide uppercase ${
+                              isActive
+                                ? "text-gold-dark"
+                                : isComplete
+                                ? "text-charcoal"
+                                : "text-charcoal-muted"
+                            }`}
+                          >
+                            {step.label}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
               )}
             </View>
@@ -238,21 +244,13 @@ export default function UploadScreen() {
 
           {/* Error Message */}
           {error && (
-            <View className="bg-red-50 border border-red-200 mt-4 p-3 rounded-lg">
-              <View className="flex-row items-start gap-2">
-                <Text className="text-red-700 text-sm flex-1">{error}</Text>
-                <Pressable
-                  onPress={resetError}
-                  className="ml-2"
-                >
-                  <X size={16} color="#DC2626" />
-                </Pressable>
-              </View>
+            <View className="mt-4 p-4 border border-charcoal/20 bg-white">
+              <Text className="text-charcoal text-sm mb-3">{error}</Text>
               <Pressable
                 onPress={() => selectedImage && handleUpload()}
-                className="mt-2 pt-2 border-t border-red-200"
+                className="py-2"
               >
-                <Text className="text-red-700 text-sm font-semibold text-center">
+                <Text className="text-gold-dark text-xs tracking-widest uppercase text-center">
                   Try Again
                 </Text>
               </Pressable>
@@ -261,28 +259,35 @@ export default function UploadScreen() {
 
           {/* Success Message */}
           {uploadSuccess && (
-            <View className="bg-green-50 border border-green-200 mt-4 p-3 rounded-lg">
-              <Text className="text-green-700 text-sm">
-                Item uploaded successfully! Check your wardrobe to see it.
+            <View className="mt-4 p-4 border border-gold/30 bg-gold/5">
+              <Text className="text-charcoal text-sm text-center">
+                Item added successfully
               </Text>
             </View>
           )}
 
-          {/* Info Section */}
-          <View className="bg-blue-50 border border-blue-200 mt-4 p-4 rounded-lg">
-            <Text className="text-blue-900 font-semibold mb-2">
-              How it works:
+          {/* How it works */}
+          <View className="mt-8 mb-8">
+            <Text className="text-xs tracking-widest text-charcoal-muted uppercase mb-4">
+              How it works
             </Text>
-            <View className="gap-1">
-              <Text className="text-blue-800 text-sm">
-                1. AI analyzes your clothing item
-              </Text>
-              <Text className="text-blue-800 text-sm">
-                2. Background is automatically removed
-              </Text>
-              <Text className="text-blue-800 text-sm">
-                3. Item is added to your wardrobe
-              </Text>
+            <View className="gap-3">
+              <View className="flex-row items-center gap-3">
+                <Text className="text-charcoal-muted text-xs">01</Text>
+                <Text className="text-charcoal text-sm">AI analyzes your item</Text>
+              </View>
+              <View className="flex-row items-center gap-3">
+                <Text className="text-charcoal-muted text-xs">02</Text>
+                <Text className="text-charcoal text-sm">
+                  Background is removed
+                </Text>
+              </View>
+              <View className="flex-row items-center gap-3">
+                <Text className="text-charcoal-muted text-xs">03</Text>
+                <Text className="text-charcoal text-sm">
+                  Added to your closet
+                </Text>
+              </View>
             </View>
           </View>
         </View>

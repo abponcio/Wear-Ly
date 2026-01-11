@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  SafeAreaView,
   TextInput,
   Pressable,
   ActivityIndicator,
@@ -11,9 +10,9 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
 import { Image } from "expo-image";
-import { LogIn, Mail, Lock } from "lucide-react-native";
 import { supabase } from "@/services/supabase";
 
 export default function SignInScreen() {
@@ -40,7 +39,6 @@ export default function SignInScreen() {
         return;
       }
 
-      // Navigate to main app
       router.replace("/(tabs)");
     } catch (error) {
       Alert.alert("Error", "An unexpected error occurred");
@@ -51,45 +49,44 @@ export default function SignInScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-cream-100">
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
         <ScrollView
-          contentContainerClassName="flex-grow justify-center px-6"
+          contentContainerClassName="flex-grow justify-center px-8"
           keyboardShouldPersistTaps="handled"
         >
-          <View className="items-center mb-8">
+          <View className="items-center mb-12">
             {/* Logo */}
-            <View className="mb-4">
+            <View className="mb-6">
               <Image
                 source={require("@/assets/logo.png")}
                 contentFit="contain"
-                style={{ width: 120, height: 120 }}
+                style={{ width: 100, height: 100 }}
                 transition={200}
               />
             </View>
-            <Text className="text-3xl font-bold text-gray-900 mt-2">
+            <Text className="text-2xl font-light text-charcoal tracking-wide">
               Welcome Back
             </Text>
-            <Text className="text-gray-500 text-center mt-2">
-              Sign in to access your wardrobe
+            <Text className="text-charcoal-muted text-sm text-center mt-2">
+              Sign in to access your closet
             </Text>
           </View>
 
-          <View className="space-y-4">
+          <View className="gap-5">
             {/* Email Input */}
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">
+              <Text className="text-xs tracking-widest text-charcoal-muted uppercase mb-2">
                 Email
               </Text>
-              <View className="flex-row items-center bg-white border border-gray-300 rounded-lg px-3 py-3">
-                <Mail size={20} color="#9CA3AF" />
+              <View className="bg-white border border-cream-300 px-4 py-4">
                 <TextInput
-                  className="flex-1 ml-3 text-gray-900"
+                  className="text-charcoal text-base"
                   placeholder="your@email.com"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#6B6B6B"
                   value={email}
                   onChangeText={setEmail}
                   autoCapitalize="none"
@@ -101,15 +98,14 @@ export default function SignInScreen() {
 
             {/* Password Input */}
             <View>
-              <Text className="text-sm font-medium text-gray-700 mb-2">
+              <Text className="text-xs tracking-widest text-charcoal-muted uppercase mb-2">
                 Password
               </Text>
-              <View className="flex-row items-center bg-white border border-gray-300 rounded-lg px-3 py-3">
-                <Lock size={20} color="#9CA3AF" />
+              <View className="bg-white border border-cream-300 px-4 py-4">
                 <TextInput
-                  className="flex-1 ml-3 text-gray-900"
+                  className="text-charcoal text-base"
                   placeholder="Enter your password"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor="#6B6B6B"
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry
@@ -123,35 +119,32 @@ export default function SignInScreen() {
             <Pressable
               onPress={handleSignIn}
               disabled={isLoading}
-              className={`py-3 rounded-lg flex-row items-center justify-center gap-2 mt-4 ${
-                isLoading
-                  ? "bg-gray-300"
-                  : "bg-indigo-600 active:bg-indigo-700"
+              className={`py-4 flex-row items-center justify-center mt-4 ${
+                isLoading ? "bg-cream-200" : "bg-charcoal active:opacity-80"
               }`}
             >
               {isLoading ? (
                 <>
-                  <ActivityIndicator color="#FFFFFF" />
-                  <Text className="text-white font-semibold text-base">
+                  <ActivityIndicator color="#1A1A1A" size="small" />
+                  <Text className="text-charcoal text-xs tracking-widest uppercase ml-2">
                     Signing in...
                   </Text>
                 </>
               ) : (
-                <>
-                  <LogIn size={20} color="#FFFFFF" />
-                  <Text className="text-white font-semibold text-base">
-                    Sign In
-                  </Text>
-                </>
+                <Text className="text-white text-xs tracking-widest uppercase">
+                  Sign In
+                </Text>
               )}
             </Pressable>
 
             {/* Sign Up Link */}
-            <View className="flex-row justify-center items-center mt-4">
-              <Text className="text-gray-600">Don't have an account? </Text>
+            <View className="flex-row justify-center items-center mt-6">
+              <Text className="text-charcoal-muted text-sm">
+                Don't have an account?{" "}
+              </Text>
               <Link href="/(auth)/signup" asChild>
                 <Pressable>
-                  <Text className="text-indigo-600 font-semibold">
+                  <Text className="text-gold-dark text-sm underline">
                     Sign Up
                   </Text>
                 </Pressable>

@@ -1,9 +1,16 @@
-import React from 'react';
-import { View, Text, FlatList, Dimensions, RefreshControl, ScrollView } from 'react-native';
-import { Package } from 'lucide-react-native';
-import ItemCard from '@/components/ui/ItemCard';
-import LoadingSkeleton from '@/components/ui/LoadingSkeleton';
-import { WardrobeItem } from '@/types/wardrobe';
+import React from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  Dimensions,
+  RefreshControl,
+  ScrollView,
+} from "react-native";
+import { Shirt } from "lucide-react-native";
+import ItemCard from "@/components/ui/ItemCard";
+import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import { WardrobeItem } from "@/types/wardrobe";
 
 interface WardrobeGridProps {
   items: WardrobeItem[];
@@ -12,18 +19,24 @@ interface WardrobeGridProps {
   refreshControl?: React.ReactElement<typeof RefreshControl>;
 }
 
-const { width } = Dimensions.get('window');
-const CARD_MARGIN = 16;
-const CARD_PADDING = 16;
+const { width } = Dimensions.get("window");
+const CARD_GAP = 12;
+const CARD_PADDING = 20;
 const NUM_COLUMNS = 2;
-const CARD_WIDTH = (width - CARD_PADDING * 2 - CARD_MARGIN) / NUM_COLUMNS;
+const CARD_WIDTH = (width - CARD_PADDING * 2 - CARD_GAP) / NUM_COLUMNS;
 
-export default function WardrobeGrid({ items, onItemPress, loading = false, refreshControl }: WardrobeGridProps) {
+export default function WardrobeGrid({
+  items,
+  onItemPress,
+  loading = false,
+  refreshControl,
+}: WardrobeGridProps) {
   if (loading && items.length === 0) {
     return (
       <ScrollView
         contentContainerStyle={{ paddingVertical: 16 }}
         refreshControl={refreshControl}
+        showsVerticalScrollIndicator={false}
       >
         <LoadingSkeleton count={6} />
       </ScrollView>
@@ -33,18 +46,17 @@ export default function WardrobeGrid({ items, onItemPress, loading = false, refr
   if (items.length === 0 && !loading) {
     return (
       <ScrollView
-        contentContainerClassName="flex-1 justify-center items-center p-8"
+        contentContainerClassName="flex-1 justify-center items-center px-8 py-16"
         refreshControl={refreshControl}
+        showsVerticalScrollIndicator={false}
       >
         <View className="items-center">
-          <View className="bg-indigo-100 rounded-full p-6 mb-4">
-            <Package size={48} color="#6366F1" />
-          </View>
-          <Text className="text-gray-900 text-xl font-bold mt-4 mb-2">
-            Your wardrobe is empty
+          <Shirt size={32} color="#6B6B6B" strokeWidth={1} />
+          <Text className="text-charcoal text-center mt-6 mb-2">
+            Your closet is empty
           </Text>
-          <Text className="text-gray-500 text-center text-sm max-w-xs">
-            Start adding items to build your AI-powered virtual closet
+          <Text className="text-charcoal-muted text-sm text-center">
+            Add items to build your wardrobe
           </Text>
         </View>
       </ScrollView>
@@ -57,18 +69,16 @@ export default function WardrobeGrid({ items, onItemPress, loading = false, refr
       numColumns={NUM_COLUMNS}
       keyExtractor={(item) => item.id}
       contentContainerStyle={{
-        padding: CARD_PADDING,
+        paddingHorizontal: CARD_PADDING,
+        paddingBottom: 100, // Account for tab bar
       }}
       columnWrapperStyle={{
-        justifyContent: 'space-between',
-        marginBottom: CARD_MARGIN,
+        justifyContent: "space-between",
+        marginBottom: CARD_GAP,
       }}
       renderItem={({ item }) => (
         <View style={{ width: CARD_WIDTH }}>
-          <ItemCard
-            item={item}
-            onPress={() => onItemPress?.(item)}
-          />
+          <ItemCard item={item} onPress={() => onItemPress?.(item)} />
         </View>
       )}
       showsVerticalScrollIndicator={false}

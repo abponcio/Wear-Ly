@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, SafeAreaView, RefreshControl } from "react-native";
+import { View, Text, RefreshControl } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import WardrobeGrid from "@/components/WardrobeGrid";
 import { useWardrobe } from "@/hooks/useWardrobe";
@@ -14,20 +15,19 @@ export default function WardrobeScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-cream-100" edges={["bottom"]}>
       <View className="flex-1">
-        {/* Header */}
-        <View className="bg-white px-4 py-4 border-b border-gray-200">
-          <Text className="text-2xl font-bold text-gray-900">My Wardrobe</Text>
-          <Text className="text-sm text-gray-500 mt-1">
-            {items.length} {items.length === 1 ? "item" : "items"}
+        {/* Minimal Header */}
+        <View className="px-5 pt-2 pb-4">
+          <Text className="text-xs tracking-widest text-charcoal-muted uppercase">
+            {items.length} {items.length === 1 ? "piece" : "pieces"}
           </Text>
         </View>
 
         {/* Error Message */}
         {error && (
-          <View className="bg-red-50 border border-red-200 mx-4 mt-4 p-3 rounded-lg">
-            <Text className="text-red-700 text-sm">{error}</Text>
+          <View className="mx-5 mb-4 p-4 border border-charcoal/10">
+            <Text className="text-charcoal text-sm">{error}</Text>
           </View>
         )}
 
@@ -37,7 +37,11 @@ export default function WardrobeScreen() {
           onItemPress={handleItemPress}
           loading={isLoading}
           refreshControl={
-            <RefreshControl refreshing={isLoading} onRefresh={refreshItems} />
+            <RefreshControl
+              refreshing={isLoading}
+              onRefresh={refreshItems}
+              tintColor="#1A1A1A"
+            />
           }
         />
       </View>
