@@ -9,8 +9,7 @@
       "ios": {
         "simulator": true,
         "buildConfiguration": "Debug",
-        "image": "latest",
-        "xcode": "16.2.0"
+        "image": "macos-sequoia-15.6-xcode-15.4"
       },
       "android": {
         "buildType": "apk"
@@ -21,7 +20,7 @@
       "distribution": "internal",
       "ios": {
         "simulator": false,
-        "xcode": "16.2.0"
+        "image": "macos-sequoia-15.6-xcode-15.4"
       },
       "android": {
         "buildType": "apk"
@@ -31,7 +30,7 @@
     "production": {
       "ios": {
         "simulator": false,
-        "xcode": "16.2.0"
+        "image": "macos-sequoia-15.6-xcode-15.4"
       },
       "android": {
         "buildType": "app-bundle"
