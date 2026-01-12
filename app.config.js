@@ -11,6 +11,12 @@ module.exports = {
       resizeMode: 'contain',
       backgroundColor: '#ffffff',
     },
+    updates: {
+      url: 'https://u.expo.dev/c42e2d25-1e3d-49a0-b538-387cf9fc0f71',
+    },
+    runtimeVersion: {
+      policy: 'appVersion',
+    },
     assetBundlePatterns: ['**/*'],
     ios: {
       supportsTablet: true,
