@@ -8,10 +8,21 @@ import type { Database } from "@/types/database";
 import type {
   ItemInsert,
   ItemRow,
+  ItemUpdate,
   OutfitInsert,
   OutfitRow,
+  ProfileRow,
+  ProfileUpdate,
+  OutfitVisualizationInsert,
+  OutfitVisualizationRow,
 } from "@/types/database";
-import type { WardrobeItem, Outfit } from "@/types/wardrobe";
+import type {
+  WardrobeItem,
+  Outfit,
+  UserProfile,
+  OutfitVisualization,
+  Gender,
+} from "@/types/wardrobe";
 import { supabaseStorage } from "@/lib/supabase-storage";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -176,6 +187,7 @@ export const getUserItems = async (userId: string): Promise<WardrobeItem[]> => {
     color: row.color,
     material: row.material,
     attributes: row.attributes,
+    gender: row.gender,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }));
@@ -401,4 +413,255 @@ export const deleteOutfit = async (outfitId: string): Promise<boolean> => {
   }
 
   return true;
+};
+
+/**
+ * Updates an item's gender
+ * @param itemId - Item ID to update
+ * @param gender - New gender value
+ * @returns true if update was successful
+ */
+export const updateItemGender = async (
+  itemId: string,
+  gender: Gender | null
+): Promise<boolean> => {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+
+  const { error } = await supabase
+    .from("items")
+    .update({ gender } as ItemUpdate)
+    .eq("id", itemId)
+    .eq("user_id", userId);
+
+  if (error) {
+    console.error("Error updating item gender:", error);
+    throw error;
+  }
+
+  return true;
+};
+
+// ==================== PROFILE FUNCTIONS ====================
+
+/**
+ * Gets or creates a user profile
+ * @returns User profile
+ */
+export const getUserProfile = async (): Promise<UserProfile | null> => {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return null;
+  }
+
+  // Try to get existing profile
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    // PGRST116 = no rows returned
+    console.error("Error fetching profile:", error);
+    throw error;
+  }
+
+  if (!data) {
+    // Create profile if it doesn't exist
+    const { data: newProfile, error: createError } = await supabase
+      .from("profiles")
+      .insert({ id: userId })
+      .select()
+      .single();
+
+    if (createError) {
+      console.error("Error creating profile:", createError);
+      throw createError;
+    }
+
+    return newProfile
+      ? {
+          id: newProfile.id,
+          personalModelUrl: newProfile.personal_model_url,
+          gender: newProfile.gender,
+          createdAt: newProfile.created_at,
+          updatedAt: newProfile.updated_at,
+        }
+      : null;
+  }
+
+  return {
+    id: data.id,
+    personalModelUrl: data.personal_model_url,
+    gender: data.gender,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+};
+
+/**
+ * Updates the user's profile
+ * @param updates - Fields to update
+ * @returns Updated profile
+ */
+export const updateUserProfile = async (
+  updates: ProfileUpdate
+): Promise<UserProfile> => {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .update(updates)
+    .eq("id", userId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error updating profile:", error);
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Failed to update profile: no data returned");
+  }
+
+  return {
+    id: data.id,
+    personalModelUrl: data.personal_model_url,
+    gender: data.gender,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+};
+
+/**
+ * Uploads a personal model image to Supabase Storage
+ * @param imageUri - Local URI of the image
+ * @returns Public URL of the uploaded image
+ */
+export const uploadPersonalModelImage = async (
+  imageUri: string
+): Promise<string> => {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+
+  const extension = imageUri.toLowerCase().endsWith(".png") ? "png" : "jpg";
+  const path = `${userId}/personal-model.${extension}`;
+
+  // Use isolated-images bucket for personal models
+  return uploadImage("isolated-images", path, imageUri);
+};
+
+// ==================== OUTFIT VISUALIZATION FUNCTIONS ====================
+
+/**
+ * Gets a cached outfit visualization by hash
+ * @param combinationHash - Hash of profile + sorted item IDs
+ * @returns Cached visualization or null
+ */
+export const getCachedVisualization = async (
+  combinationHash: string
+): Promise<OutfitVisualization | null> => {
+  const { data, error } = await supabase
+    .from("outfit_visualizations")
+    .select("*")
+    .eq("combination_hash", combinationHash)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    console.error("Error fetching cached visualization:", error);
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    combinationHash: data.combination_hash,
+    itemIds: data.item_ids,
+    visualizationUrl: data.visualization_url,
+    createdAt: data.created_at,
+  };
+};
+
+/**
+ * Saves a new outfit visualization to the cache
+ * @param combinationHash - Hash of profile + sorted item IDs
+ * @param itemIds - Array of item IDs in the outfit
+ * @param visualizationUrl - URL of the generated visualization image
+ * @returns Created visualization
+ */
+export const saveVisualization = async (
+  combinationHash: string,
+  itemIds: string[],
+  visualizationUrl: string
+): Promise<OutfitVisualization> => {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+
+  const insertData: OutfitVisualizationInsert = {
+    user_id: userId,
+    combination_hash: combinationHash,
+    item_ids: itemIds,
+    visualization_url: visualizationUrl,
+  };
+
+  // Use upsert to update if hash exists, insert if not
+  const { data, error } = await supabase
+    .from("outfit_visualizations")
+    .upsert(insertData, { onConflict: "combination_hash" })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error saving visualization:", error);
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Failed to save visualization: no data returned");
+  }
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    combinationHash: data.combination_hash,
+    itemIds: data.item_ids,
+    visualizationUrl: data.visualization_url,
+    createdAt: data.created_at,
+  };
+};
+
+/**
+ * Uploads a visualization image to Supabase Storage
+ * @param imageUri - Local URI of the image
+ * @param hash - Combination hash for unique naming
+ * @returns Public URL of the uploaded image
+ */
+export const uploadVisualizationImage = async (
+  imageUri: string,
+  hash: string
+): Promise<string> => {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
+
+  const extension = imageUri.toLowerCase().endsWith(".png") ? "png" : "jpg";
+  const path = `${userId}/visualizations/${hash}.${extension}`;
+
+  return uploadImage("isolated-images", path, imageUri);
 };

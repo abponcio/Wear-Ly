@@ -1,14 +1,12 @@
 import { Tabs, useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
-import { LogOut, Shirt, Plus, Sparkles } from "lucide-react-native";
-import { supabase } from "@/services/supabase";
+import { Settings, Shirt, Plus, Sparkles } from "lucide-react-native";
 
 export default function TabLayout() {
   const router = useRouter();
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.replace("/(auth)/signin");
+  const handleOpenSettings = () => {
+    router.push("/settings");
   };
 
   return (
@@ -31,10 +29,10 @@ export default function TabLayout() {
         headerTintColor: "#1A1A1A",
         headerRight: () => (
           <Pressable
-            onPress={handleSignOut}
+            onPress={handleOpenSettings}
             className="mr-4 p-2 active:opacity-50"
           >
-            <LogOut size={20} color="#1A1A1A" strokeWidth={1.5} />
+            <Settings size={20} color="#1A1A1A" strokeWidth={1.5} />
           </Pressable>
         ),
         // Tab bar styling - glassmorphism

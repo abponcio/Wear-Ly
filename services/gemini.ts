@@ -5,14 +5,17 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import {
   readAsStringAsync,
+  writeAsStringAsync,
+  cacheDirectory,
   EncodingType,
   getInfoAsync,
 } from "expo-file-system/legacy";
 import {
   WardrobeItemMetadataSchema,
+  DetectedClothingItemsSchema,
   OutfitSuggestionSchema,
 } from "@/lib/validations";
-import type { WardrobeItemMetadata, OutfitSuggestion } from "@/lib/validations";
+import type { WardrobeItemMetadata, DetectedClothingItems, OutfitSuggestion } from "@/lib/validations";
 import type { WardrobeItem, OutfitContext } from "@/types/wardrobe";
 
 // Initialize Gemini client
@@ -102,7 +105,7 @@ const imageToBase64 = async (imageUri: string): Promise<string> => {
 };
 
 /**
- * Extracts JSON from Gemini response (handles markdown code blocks)
+ * Extracts JSON from Gemini response (handles markdown code blocks, objects, and arrays)
  */
 const extractJSONFromResponse = (response: string): string => {
   // Remove markdown code blocks if present
@@ -115,6 +118,12 @@ const extractJSONFromResponse = (response: string): string => {
   const jsonObjectMatch = response.match(/\{[\s\S]*\}/);
   if (jsonObjectMatch) {
     return jsonObjectMatch[0];
+  }
+
+  // Try to find JSON array in response
+  const jsonArrayMatch = response.match(/\[[\s\S]*\]/);
+  if (jsonArrayMatch) {
+    return jsonArrayMatch[0];
   }
 
   return response.trim();
@@ -247,6 +256,358 @@ Important:
 };
 
 /**
+ * Detects ALL clothing items in an image and returns metadata for each
+ * Used for multi-item detection when user uploads a full outfit photo
+ * @param imageUri - Local URI of the image file (from camera/gallery)
+ * @returns Array of detected items with metadata, or null if detection fails
+ */
+export const detectAllClothingItems = async (
+  imageUri: string
+): Promise<WardrobeItemMetadata[] | null> => {
+  try {
+    const genAI = getGeminiClient();
+    const model = genAI.getGenerativeModel(
+      { model: "gemini-2.0-flash" },
+      { apiVersion: "v1beta" }
+    );
+
+    // Convert image to base64
+    const base64Image = await imageToBase64(imageUri);
+
+    // Log image size for debugging
+    const imageSizeKB = Math.round(base64Image.length / 1024);
+    console.log(`[Multi-Item Detection] Image size: ${imageSizeKB} KB (base64)`);
+
+    // Get file extension to determine MIME type
+    const lowerUri = imageUri.toLowerCase();
+    let mimeType = "image/jpeg";
+    if (lowerUri.endsWith(".png")) {
+      mimeType = "image/png";
+    } else if (lowerUri.endsWith(".heic") || lowerUri.endsWith(".heif")) {
+      mimeType = "image/heic";
+    } else if (lowerUri.endsWith(".webp")) {
+      mimeType = "image/webp";
+    }
+
+    // Prompt for detecting ALL clothing items in the image
+    const prompt = `Analyze this image and identify ALL visible clothing items worn by the person or displayed.
+
+Return a JSON object with an "items" array containing each detected clothing item:
+{
+  "items": [
+    {
+      "category": "Top/Bottom/Shoes/Accessories/Outerwear",
+      "subcategory": "Specific type (T-Shirt, Jeans, Sneakers, Watch, Jacket, etc.)",
+      "color": "Primary color name",
+      "material": "Material/fabric type",
+      "attributes": ["casual", "formal", "summer", "winter", "vintage", "sporty", etc.],
+      "gender": "male/female/unisex"
+    }
+  ]
+}
+
+Important rules:
+- Return ONLY valid JSON, no markdown, no explanations
+- Detect EVERY distinct clothing item visible (e.g., jacket AND shirt AND pants = 3 items)
+- Category must be one of: Top, Bottom, Shoes, Accessories, Outerwear
+- Do NOT include the same item twice
+- If only one item is visible, still return it in the items array
+- Each item must have all fields: category, subcategory, color, material, attributes, gender
+- Be specific with subcategories (e.g., "Overshirt" not just "Shirt")
+- Gender should be "male" for traditionally masculine items, "female" for feminine, or "unisex" for neutral items`;
+
+    // Generate content with image
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: base64Image,
+          mimeType,
+        },
+      },
+    ]);
+
+    const response = result.response;
+    const text = response.text();
+    console.log("[Multi-Item Detection] Raw response:", text);
+
+    // Extract JSON from response
+    const jsonString = extractJSONFromResponse(text);
+
+    // Parse JSON
+    let parsedData: unknown;
+    try {
+      parsedData = JSON.parse(jsonString);
+    } catch (parseError) {
+      console.error("[Multi-Item Detection] Failed to parse JSON:", parseError);
+      console.error("Response text:", text);
+      return null;
+    }
+
+    // Validate with Zod schema
+    const validationResult = DetectedClothingItemsSchema.safeParse(parsedData);
+
+    if (!validationResult.success) {
+      console.error("[Multi-Item Detection] Validation failed:", validationResult.error);
+      console.error("Parsed data:", parsedData);
+      return null;
+    }
+
+    console.log(`[Multi-Item Detection] Found ${validationResult.data.items.length} items`);
+    return validationResult.data.items;
+  } catch (error) {
+    console.error("[Multi-Item Detection] Error:", error);
+
+    if (error instanceof Error) {
+      if (error.message.includes("API_KEY")) {
+        throw new Error("API configuration error. Please check your API key.");
+      } else if (
+        error.message.includes("429") ||
+        error.message.includes("quota") ||
+        error.message.includes("QUOTA")
+      ) {
+        throw new Error("AI service is busy. Please wait a moment and try again.");
+      } else if (
+        error.message.includes("network") ||
+        error.message.includes("Network request failed")
+      ) {
+        throw new Error("Network error. Please check your connection and try again.");
+      }
+    }
+
+    return null;
+  }
+};
+
+/**
+ * Generates a clean, studio-quality product image for a clothing item using Gemini
+ * Uses the original photo as visual context to create a professional e-commerce style shot
+ * @param originalImageUri - Local URI of the original image
+ * @param itemMetadata - Metadata about the specific clothing item to generate
+ * @returns Local URI of the generated image, or the original URI if generation fails
+ */
+export const generateCleanProductImage = async (
+  originalImageUri: string,
+  itemMetadata: WardrobeItemMetadata
+): Promise<string> => {
+  try {
+    const genAI = getGeminiClient();
+
+    // Use gemini-2.0-flash-exp for image generation (experimental model with image output)
+    const model = genAI.getGenerativeModel(
+      {
+        model: "gemini-2.0-flash-exp",
+        generationConfig: {
+          // @ts-ignore - responseModalities is supported in v2 API but not in types yet
+          responseModalities: ["TEXT", "IMAGE"],
+        },
+      },
+      { apiVersion: "v1beta" }
+    );
+
+    // Convert original image to base64 for visual context
+    const base64Image = await imageToBase64(originalImageUri);
+
+    // Get MIME type
+    const lowerUri = originalImageUri.toLowerCase();
+    let mimeType = "image/jpeg";
+    if (lowerUri.endsWith(".png")) {
+      mimeType = "image/png";
+    } else if (lowerUri.endsWith(".heic") || lowerUri.endsWith(".heif")) {
+      mimeType = "image/heic";
+    } else if (lowerUri.endsWith(".webp")) {
+      mimeType = "image/webp";
+    }
+
+    // Build a detailed prompt for studio-quality product shot
+    const prompt = `Based on this photo showing a ${itemMetadata.color} ${itemMetadata.subcategory}, generate a professional studio product photograph of ONLY this specific clothing item.
+
+Requirements:
+- Pure white background (#FFFFFF)
+- Professional e-commerce lighting (soft, even)
+- Item centered in frame
+- No model, mannequin, or person - just the isolated garment
+- High detail showing the ${itemMetadata.material} texture
+- Clean, crisp product photography style like Zara or H&M catalog
+- The exact ${itemMetadata.color} color as shown in the reference
+- ${itemMetadata.subcategory} style matching the original
+
+Generate ONLY the clothing item, nothing else.`;
+
+    console.log(`[Image Gen] Generating clean image for: ${itemMetadata.color} ${itemMetadata.subcategory}`);
+
+    // Generate with image context
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: base64Image,
+          mimeType,
+        },
+      },
+    ]);
+
+    const response = result.response;
+    const candidates = response.candidates;
+
+    if (!candidates || candidates.length === 0) {
+      console.warn("[Image Gen] No candidates in response, returning original");
+      return originalImageUri;
+    }
+
+    // Look for image data in the response parts
+    for (const candidate of candidates) {
+      if (candidate.content && candidate.content.parts) {
+        for (const part of candidate.content.parts) {
+          // @ts-ignore - inlineData with image is returned for image generation
+          if (part.inlineData && part.inlineData.data) {
+            // @ts-ignore
+            const imageBase64 = part.inlineData.data;
+            // @ts-ignore
+            const imageMimeType = part.inlineData.mimeType || "image/png";
+
+            // Determine file extension
+            const ext = imageMimeType.includes("png") ? "png" : "jpeg";
+
+            // Save to local filesystem
+            const generatedImageUri = `${cacheDirectory}generated_${Date.now()}.${ext}`;
+            await writeAsStringAsync(generatedImageUri, imageBase64, {
+              encoding: EncodingType.Base64,
+            });
+
+            console.log(`[Image Gen] Successfully generated: ${generatedImageUri}`);
+            return generatedImageUri;
+          }
+        }
+      }
+    }
+
+    // If no image was generated, fall back to original
+    console.warn("[Image Gen] No image data in response, returning original");
+    return originalImageUri;
+  } catch (error) {
+    console.error("[Image Gen] Error generating product image:", error);
+
+    // Return original image as fallback - don't block the upload flow
+    console.warn("[Image Gen] Falling back to original image");
+    return originalImageUri;
+  }
+};
+
+/**
+ * Generates a professional "personal model" reference image from a user's photo
+ * Transforms the user into a fashion model in a neutral studio setting while preserving identity
+ * @param userPhotoUri - Local URI of the user's photo
+ * @returns Local URI of the generated personal model image, or the original if generation fails
+ */
+export const generatePersonalModel = async (
+  userPhotoUri: string
+): Promise<string> => {
+  try {
+    const genAI = getGeminiClient();
+
+    // Use gemini-2.0-flash-exp for image generation
+    const model = genAI.getGenerativeModel(
+      {
+        model: "gemini-2.0-flash-exp",
+        generationConfig: {
+          // @ts-ignore - responseModalities is supported in v2 API but not in types yet
+          responseModalities: ["TEXT", "IMAGE"],
+        },
+      },
+      { apiVersion: "v1beta" }
+    );
+
+    // Convert user photo to base64
+    const base64Image = await imageToBase64(userPhotoUri);
+
+    // Get MIME type
+    const lowerUri = userPhotoUri.toLowerCase();
+    let mimeType = "image/jpeg";
+    if (lowerUri.endsWith(".png")) {
+      mimeType = "image/png";
+    } else if (lowerUri.endsWith(".heic") || lowerUri.endsWith(".heif")) {
+      mimeType = "image/heic";
+    } else if (lowerUri.endsWith(".webp")) {
+      mimeType = "image/webp";
+    }
+
+    // Prompt to transform user into fashion model reference
+    const prompt = `Transform this person into a professional fashion model reference image.
+
+Requirements:
+- PRESERVE their exact facial features, hair color, hairstyle, and body shape
+- Place them in a neutral studio setting with soft, even lighting
+- Use a clean, minimalist light gray or white background
+- Dress them in simple, tight-fitting white base-layer clothing (white t-shirt and light pants)
+- Professional fashion photography pose - standing straight, relaxed, facing camera
+- Full body shot from head to feet
+- High quality, studio lighting with no harsh shadows
+- The person should look like they're ready for a virtual try-on session
+
+This is a fashion model reference photo for virtual clothing try-on. Maintain the person's identity exactly.`;
+
+    console.log("[Personal Model] Generating model reference image...");
+
+    // Generate with image context
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: base64Image,
+          mimeType,
+        },
+      },
+    ]);
+
+    const response = result.response;
+    const candidates = response.candidates;
+
+    if (!candidates || candidates.length === 0) {
+      console.warn("[Personal Model] No candidates in response, returning original");
+      return userPhotoUri;
+    }
+
+    // Look for image data in the response parts
+    for (const candidate of candidates) {
+      if (candidate.content && candidate.content.parts) {
+        for (const part of candidate.content.parts) {
+          // @ts-ignore - inlineData with image is returned for image generation
+          if (part.inlineData && part.inlineData.data) {
+            // @ts-ignore
+            const imageBase64 = part.inlineData.data;
+            // @ts-ignore
+            const imageMimeType = part.inlineData.mimeType || "image/png";
+
+            // Determine file extension
+            const ext = imageMimeType.includes("png") ? "png" : "jpeg";
+
+            // Save to local filesystem
+            const personalModelUri = `${cacheDirectory}personal_model_${Date.now()}.${ext}`;
+            await writeAsStringAsync(personalModelUri, imageBase64, {
+              encoding: EncodingType.Base64,
+            });
+
+            console.log(`[Personal Model] Successfully generated: ${personalModelUri}`);
+            return personalModelUri;
+          }
+        }
+      }
+    }
+
+    // If no image was generated, fall back to original
+    console.warn("[Personal Model] No image data in response, returning original");
+    return userPhotoUri;
+  } catch (error) {
+    console.error("[Personal Model] Error generating personal model:", error);
+
+    // Return original image as fallback
+    console.warn("[Personal Model] Falling back to original image");
+    return userPhotoUri;
+  }
+};
+
+/**
  * Generates an outfit suggestion using Gemini AI based on wardrobe items and context
  * @param wardrobeItems - Array of wardrobe items with metadata
  * @param context - Occasion and weather context for outfit selection
@@ -281,25 +642,48 @@ export const generateOutfit = async (
     const occasion = context.occasion || "casual";
     const weather = context.weather || "moderate";
 
+    // Group items by category for diversity check
+    const categories = [...new Set(wardrobeItems.map(i => i.category))];
+    const categoryInfo = categories.map(cat => {
+      const count = wardrobeItems.filter(i => i.category === cat).length;
+      return `${cat}: ${count} items`;
+    }).join(", ");
+
     const prompt = `Given this wardrobe:
 ${itemsJSON}
+
+Available categories: ${categoryInfo}
 
 Context:
 - Occasion: ${occasion}
 - Weather: ${weather}
 
-Suggest 3 items that create a stylish, cohesive outfit. Return ONLY valid JSON in this format:
+Create a COMPLETE outfit. Return ONLY valid JSON in this format:
 {
-  "itemIds": ["uuid1", "uuid2", "uuid3"],
+  "itemIds": ["uuid1", "uuid2", "uuid3", "uuid4"],
   "suggestion": "Brief explanation of why these items work together (2-3 sentences)"
 }
 
+CRITICAL RULES FOR CATEGORY DIVERSITY:
+1. MUST include items from DIFFERENT categories to create a complete outfit
+2. A complete outfit typically includes: Top + Bottom + Shoes (minimum)
+3. If available, add Accessories or Outerwear for a polished look
+4. NEVER select multiple items from the same category (e.g., don't pick 2 tops)
+5. Prefer 3-5 items depending on what creates the most complete look
+
+Category Priority:
+- Top (shirt, t-shirt, blouse, sweater) - REQUIRED
+- Bottom (pants, jeans, skirt, shorts) - REQUIRED if not a dress
+- Shoes (sneakers, boots, heels, loafers) - STRONGLY PREFERRED
+- Outerwear (jacket, coat, blazer) - if weather is cool/cold/rainy
+- Accessories (watch, belt, bag, hat) - if available
+
 Important:
 - Return ONLY valid JSON, no markdown formatting
-- Must suggest exactly 3 items
 - Item IDs must match IDs from the wardrobe array
 - Choose items that complement each other in color, style, and occasion
-- Consider the weather context for appropriate clothing`;
+- Consider the weather context for appropriate clothing
+- A well-dressed person needs shoes! Include them if available.`;
 
     const result = await model.generateContent(prompt);
     const response = result.response;

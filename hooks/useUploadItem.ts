@@ -1,19 +1,20 @@
 /**
  * Custom hook for uploading wardrobe items
- * Orchestrates the complete upload workflow: Gemini analysis, background removal, and Supabase storage
+ * Two-phase workflow:
+ * 1. Analyze: Detect clothing items in photo (fast, no generation)
+ * 2. Process: Generate clean images for selected items only
  */
 
 import { useState, useCallback } from "react";
-import { processImageWithGemini } from "@/services/gemini";
-import { removeBackground } from "@/services/photoroom";
+import { detectAllClothingItems, generateCleanProductImage } from "@/services/gemini";
 import {
-  supabase,
   uploadOriginalImage,
   uploadIsolatedImage,
   createItem,
   getCurrentUserId,
 } from "@/services/supabase";
 import type { WardrobeItem } from "@/types/wardrobe";
+import type { WardrobeItemMetadata } from "@/lib/validations";
 
 /**
  * Generate a UUID v4 (React Native compatible)
@@ -29,114 +30,255 @@ const generateUUID = (): string => {
 export type UploadStep =
   | "idle"
   | "analyzing"
-  | "removing-background"
+  | "generating-images"
   | "uploading-images"
   | "saving"
   | "complete";
 
+export interface DetectedItem extends WardrobeItemMetadata {
+  id: string; // Temporary ID for selection tracking
+  selected: boolean;
+}
+
+interface UploadProgress {
+  currentItem: number;
+  totalItems: number;
+}
+
 interface UseUploadItemReturn {
-  uploadItem: (imageUri: string) => Promise<WardrobeItem | null>;
+  // Phase 1: Analyze
+  analyzeImage: (imageUri: string) => Promise<DetectedItem[] | null>;
+  detectedItems: DetectedItem[];
+  setDetectedItems: React.Dispatch<React.SetStateAction<DetectedItem[]>>;
+  toggleItemSelection: (itemId: string) => void;
+  selectAllItems: () => void;
+  deselectAllItems: () => void;
+
+  // Phase 2: Process
+  processSelectedItems: (imageUri: string) => Promise<WardrobeItem[]>;
+
+  // State
   isLoading: boolean;
+  isAnalyzing: boolean;
+  isProcessing: boolean;
   currentStep: UploadStep;
+  progress: UploadProgress;
   error: string | null;
   resetError: () => void;
+  resetState: () => void;
 }
 
 /**
- * Hook for uploading wardrobe items with AI analysis and background removal
+ * Hook for uploading wardrobe items with AI multi-item detection and generative imaging
  */
 export const useUploadItem = (): UseUploadItemReturn => {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState<UploadStep>("idle");
+  const [progress, setProgress] = useState<UploadProgress>({ currentItem: 0, totalItems: 0 });
   const [error, setError] = useState<string | null>(null);
+  const [detectedItems, setDetectedItems] = useState<DetectedItem[]>([]);
 
   const resetError = useCallback(() => {
     setError(null);
   }, []);
 
-  const uploadItem = useCallback(
-    async (imageUri: string): Promise<WardrobeItem | null> => {
-      setIsLoading(true);
+  const resetState = useCallback(() => {
+    setDetectedItems([]);
+    setError(null);
+    setCurrentStep("idle");
+    setProgress({ currentItem: 0, totalItems: 0 });
+    setIsAnalyzing(false);
+    setIsProcessing(false);
+  }, []);
+
+  /**
+   * Toggle selection for a specific item
+   */
+  const toggleItemSelection = useCallback((itemId: string) => {
+    setDetectedItems(prev =>
+      prev.map(item =>
+        item.id === itemId ? { ...item, selected: !item.selected } : item
+      )
+    );
+  }, []);
+
+  /**
+   * Select all detected items
+   */
+  const selectAllItems = useCallback(() => {
+    setDetectedItems(prev => prev.map(item => ({ ...item, selected: true })));
+  }, []);
+
+  /**
+   * Deselect all detected items
+   */
+  const deselectAllItems = useCallback(() => {
+    setDetectedItems(prev => prev.map(item => ({ ...item, selected: false })));
+  }, []);
+
+  /**
+   * Phase 1: Analyze image and detect clothing items (no image generation)
+   */
+  const analyzeImage = useCallback(
+    async (imageUri: string): Promise<DetectedItem[] | null> => {
+      setIsAnalyzing(true);
       setError(null);
+      setCurrentStep("analyzing");
+      setDetectedItems([]);
 
       try {
-        // Step 1: Get current user ID
+        // Get current user ID first
         const userId = await getCurrentUserId();
         if (!userId) {
           throw new Error("Please sign in to upload items.");
         }
 
-        // Step 2: Analyze image with Gemini to get metadata
-        setCurrentStep("analyzing");
-        console.log("Analyzing image with Gemini...");
-        const metadata = await processImageWithGemini(imageUri);
+        console.log("[Upload] Analyzing image for multiple items...");
+        const items = await detectAllClothingItems(imageUri);
 
-        if (!metadata) {
+        if (!items || items.length === 0) {
           throw new Error(
-            "Couldn't identify the clothing item. Please try a clearer photo."
+            "Couldn't identify any clothing items. Please try a clearer photo."
           );
         }
 
-        console.log("Metadata extracted:", metadata);
+        console.log(`[Upload] Detected ${items.length} items:`, items);
 
-        // Step 3: Remove background using Photoroom
-        setCurrentStep("removing-background");
-        console.log("Removing background...");
-        const isolatedImageUri = await removeBackground(imageUri);
-        console.log("Background removed, isolated image:", isolatedImageUri);
+        // Convert to DetectedItems with selection state (all selected by default)
+        const detectedWithSelection: DetectedItem[] = items.map((item, index) => ({
+          ...item,
+          id: `detected-${index}-${Date.now()}`, // Temporary ID for tracking
+          selected: true, // Default to selected
+        }));
 
-        // Step 4: Generate item ID
-        const itemId = generateUUID();
+        setDetectedItems(detectedWithSelection);
+        setCurrentStep("idle");
+        setIsAnalyzing(false);
+        return detectedWithSelection;
+      } catch (err) {
+        console.error("[Upload] Error analyzing image:", err);
 
-        // Step 5: Upload images to Supabase Storage
-        setCurrentStep("uploading-images");
-        console.log("Uploading images...");
-        const [originalImageUrl, isolatedImageUrl] = await Promise.all([
-          uploadOriginalImage(userId, itemId, imageUri),
-          uploadIsolatedImage(userId, itemId, isolatedImageUri),
-        ]);
-        console.log("Images uploaded:", { originalImageUrl, isolatedImageUrl });
+        let errorMessage = "Failed to analyze image. Please try again.";
+        if (err instanceof Error) {
+          const message = err.message.toLowerCase();
+          if (message.includes("network") || message.includes("fetch")) {
+            errorMessage = "Network error. Please check your connection.";
+          } else if (message.includes("auth") || message.includes("sign in")) {
+            errorMessage = "Please sign in to upload items.";
+          } else if (message.includes("quota") || message.includes("busy")) {
+            errorMessage = "AI service is busy. Please wait and try again.";
+          } else {
+            errorMessage = err.message;
+          }
+        }
 
-        // Step 6: Save item metadata to database
-        setCurrentStep("saving");
-        console.log("Saving item to database...");
-        const itemData = {
-          id: itemId,
-          user_id: userId,
-          image_url: originalImageUrl,
-          isolated_image_url: isolatedImageUrl,
-          category: metadata.category,
-          subcategory: metadata.subcategory,
-          color: metadata.color,
-          material: metadata.material,
-          attributes: metadata.attributes,
-        };
+        setError(errorMessage);
+        setIsAnalyzing(false);
+        setCurrentStep("idle");
+        return null;
+      }
+    },
+    []
+  );
 
-        const createdItem = await createItem(itemData);
-        console.log("Item created successfully:", createdItem.id);
+  /**
+   * Phase 2: Process selected items - generate images and save to DB
+   */
+  const processSelectedItems = useCallback(
+    async (imageUri: string): Promise<WardrobeItem[]> => {
+      const selectedItems = detectedItems.filter(item => item.selected);
+
+      if (selectedItems.length === 0) {
+        setError("Please select at least one item to add.");
+        return [];
+      }
+
+      setIsProcessing(true);
+      setError(null);
+      const createdItems: WardrobeItem[] = [];
+
+      try {
+        const userId = await getCurrentUserId();
+        if (!userId) {
+          throw new Error("Please sign in to upload items.");
+        }
+
+        setProgress({ currentItem: 0, totalItems: selectedItems.length });
+
+        // Process each selected item
+        for (let i = 0; i < selectedItems.length; i++) {
+          const itemMetadata = selectedItems[i];
+          setProgress({ currentItem: i + 1, totalItems: selectedItems.length });
+
+          console.log(`[Upload] Processing item ${i + 1}/${selectedItems.length}: ${itemMetadata.color} ${itemMetadata.subcategory}`);
+
+          // Generate clean product image using Gemini
+          setCurrentStep("generating-images");
+          console.log(`[Upload] Generating clean product image for item ${i + 1}...`);
+          const cleanImageUri = await generateCleanProductImage(imageUri, itemMetadata);
+          console.log(`[Upload] Clean image generated: ${cleanImageUri}`);
+
+          // Generate item ID
+          const itemId = generateUUID();
+
+          // Upload images to Supabase Storage
+          setCurrentStep("uploading-images");
+          console.log(`[Upload] Uploading images for item ${i + 1}...`);
+          const [originalImageUrl, cleanImageUrl] = await Promise.all([
+            uploadOriginalImage(userId, itemId, imageUri),
+            uploadIsolatedImage(userId, itemId, cleanImageUri),
+          ]);
+          console.log(`[Upload] Images uploaded for item ${i + 1}:`, { originalImageUrl, cleanImageUrl });
+
+          // Save item metadata to database
+          setCurrentStep("saving");
+          console.log(`[Upload] Saving item ${i + 1} to database...`);
+          const itemData = {
+            id: itemId,
+            user_id: userId,
+            image_url: originalImageUrl,
+            isolated_image_url: cleanImageUrl,
+            category: itemMetadata.category,
+            subcategory: itemMetadata.subcategory,
+            color: itemMetadata.color,
+            material: itemMetadata.material,
+            attributes: itemMetadata.attributes,
+            gender: itemMetadata.gender || 'unisex',
+          };
+
+          const createdItem = await createItem(itemData);
+          console.log(`[Upload] Item ${i + 1} created successfully:`, createdItem.id);
+
+          // Transform to WardrobeItem format
+          const wardrobeItem: WardrobeItem = {
+            id: createdItem.id,
+            userId: createdItem.user_id,
+            imageUrl: createdItem.image_url,
+            isolatedImageUrl: createdItem.isolated_image_url,
+            category: createdItem.category,
+            subcategory: createdItem.subcategory,
+            color: createdItem.color,
+            material: createdItem.material,
+            attributes: createdItem.attributes,
+            gender: createdItem.gender,
+            createdAt: createdItem.created_at,
+            updatedAt: createdItem.updated_at,
+          };
+
+          createdItems.push(wardrobeItem);
+        }
 
         setCurrentStep("complete");
+        console.log(`[Upload] Successfully created ${createdItems.length} items`);
 
-        // Step 8: Transform to WardrobeItem format and return
-        const wardrobeItem: WardrobeItem = {
-          id: createdItem.id,
-          userId: createdItem.user_id,
-          imageUrl: createdItem.image_url,
-          isolatedImageUrl: createdItem.isolated_image_url,
-          category: createdItem.category,
-          subcategory: createdItem.subcategory,
-          color: createdItem.color,
-          material: createdItem.material,
-          attributes: createdItem.attributes,
-          createdAt: createdItem.created_at,
-          updatedAt: createdItem.updated_at,
-        };
-
-        setIsLoading(false);
+        setIsProcessing(false);
         setCurrentStep("idle");
-        return wardrobeItem;
+        setProgress({ currentItem: 0, totalItems: 0 });
+        setDetectedItems([]);
+        return createdItems;
       } catch (err) {
-        console.error("Error uploading item:", err);
+        console.error("[Upload] Error processing items:", err);
 
         // User-friendly error messages
         let errorMessage = "Something went wrong. Please try again.";
@@ -150,35 +292,54 @@ export const useUploadItem = (): UseUploadItemReturn => {
             errorMessage = "Please sign in to upload items.";
           } else if (message.includes("api") || message.includes("gemini")) {
             errorMessage =
-              "AI analysis failed. Please try again with a clearer photo.";
+              "AI image generation failed. Please try again.";
+          } else if (message.includes("quota") || message.includes("busy")) {
+            errorMessage = "AI service is busy. Please wait a moment and try again.";
           } else if (
             message.includes("storage") ||
             message.includes("upload")
           ) {
             errorMessage =
-              "Failed to upload images. Please check your connection and try again.";
+              "Failed to upload images. Please check your connection.";
           } else if (message.includes("database") || message.includes("save")) {
-            errorMessage = "Failed to save item. Please try again.";
+            errorMessage = "Failed to save items. Please try again.";
           } else {
-            // Use the original message if it's already user-friendly
             errorMessage = err.message;
           }
         }
 
         setError(errorMessage);
-        setIsLoading(false);
+        setIsProcessing(false);
         setCurrentStep("idle");
-        return null;
+        setProgress({ currentItem: 0, totalItems: 0 });
+        return createdItems; // Return any items that were created before the error
       }
     },
-    []
+    [detectedItems]
   );
 
+  const isLoading = isAnalyzing || isProcessing;
+
   return {
-    uploadItem,
+    // Phase 1
+    analyzeImage,
+    detectedItems,
+    setDetectedItems,
+    toggleItemSelection,
+    selectAllItems,
+    deselectAllItems,
+
+    // Phase 2
+    processSelectedItems,
+
+    // State
     isLoading,
+    isAnalyzing,
+    isProcessing,
     currentStep,
+    progress,
     error,
     resetError,
+    resetState,
   };
 };

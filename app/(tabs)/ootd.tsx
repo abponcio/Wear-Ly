@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -18,11 +18,16 @@ import {
   Bookmark,
   Clock,
   Check,
+  User,
+  AlertCircle,
 } from "lucide-react-native";
+import { Image } from "expo-image";
 import { useWardrobe, useOutfitGeneration } from "@/hooks/useWardrobe";
 import { useOutfitHistory } from "@/hooks/useOutfitHistory";
+import { getUserProfile } from "@/services/supabase";
+import { getTryOnVisualization, checkGenderCompatibility } from "@/services/tryon";
 import ItemCard from "@/components/ui/ItemCard";
-import type { WardrobeItem, OutfitContext } from "@/types/wardrobe";
+import type { WardrobeItem, OutfitContext, UserProfile, OutfitVisualization } from "@/types/wardrobe";
 
 const OCCASIONS = [
   { value: "casual", label: "Casual" },
@@ -53,8 +58,29 @@ export default function OOTDScreen() {
   const [weather, setWeather] = useState<string>("moderate");
   const [isSaved, setIsSaved] = useState(false);
 
+  // Try-On state
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isGeneratingTryOn, setIsGeneratingTryOn] = useState(false);
+  const [tryOnVisualization, setTryOnVisualization] = useState<OutfitVisualization | null>(null);
+  const [tryOnError, setTryOnError] = useState<string | null>(null);
+
+  // Load profile on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const userProfile = await getUserProfile();
+        setProfile(userProfile);
+      } catch (err) {
+        console.error("Error loading profile:", err);
+      }
+    };
+    loadProfile();
+  }, []);
+
   const handleGenerate = async () => {
     setIsSaved(false);
+    setTryOnVisualization(null);
+    setTryOnError(null);
     const context: OutfitContext = {
       occasion,
       weather,
@@ -83,6 +109,67 @@ export default function OOTDScreen() {
   const outfitItems: WardrobeItem[] = currentOutfit
     ? items.filter((item) => currentOutfit.itemIds.includes(item.id))
     : [];
+
+  const handleTryOn = useCallback(async () => {
+    if (!profile?.personalModelUrl) {
+      Alert.alert(
+        "Personal Model Required",
+        "Please create your personal model in Settings first.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Go to Settings", onPress: () => router.push("/settings") },
+        ]
+      );
+      return;
+    }
+
+    if (outfitItems.length === 0) {
+      Alert.alert("No Outfit", "Generate an outfit first.");
+      return;
+    }
+
+    // Check gender compatibility
+    const compatibility = checkGenderCompatibility(profile.gender, outfitItems);
+    if (!compatibility.isCompatible) {
+      const incompatibleNames = compatibility.incompatibleItems
+        .map(i => `${i.color} ${i.subcategory}`)
+        .join(", ");
+      Alert.alert(
+        "Clothing Mismatch",
+        `Some items may not fit well: ${incompatibleNames}. Continue anyway?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Continue", onPress: () => generateTryOn(Boolean(tryOnVisualization)) },
+        ]
+      );
+      return;
+    }
+
+    generateTryOn(Boolean(tryOnVisualization));
+  }, [profile, outfitItems, router, tryOnVisualization]);
+
+  const generateTryOn = async (forceRegenerate: boolean = false) => {
+    if (!profile?.personalModelUrl) return;
+
+    setIsGeneratingTryOn(true);
+    setTryOnError(null);
+
+    try {
+      // If we already have a visualization and force is true, regenerate
+      const shouldForce = forceRegenerate || Boolean(tryOnVisualization);
+      const visualization = await getTryOnVisualization(
+        profile.personalModelUrl,
+        outfitItems,
+        shouldForce
+      );
+      setTryOnVisualization(visualization);
+    } catch (err) {
+      console.error("Error generating try-on:", err);
+      setTryOnError("Failed to generate try-on. Please try again.");
+    } finally {
+      setIsGeneratingTryOn(false);
+    }
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-cream-100" edges={["bottom"]}>
@@ -264,12 +351,80 @@ export default function OOTDScreen() {
             </View>
 
             {/* Outfit Items Grid */}
-            <View className="flex-row flex-wrap justify-between gap-3">
+            <View className="flex-row flex-wrap justify-between gap-3 mb-6">
               {outfitItems.map((item) => (
                 <View key={item.id} className="w-[48%]">
                   <ItemCard item={item} />
                 </View>
               ))}
+            </View>
+
+            {/* Virtual Try-On Section */}
+            <View className="border-t border-cream-200 pt-6">
+              <View className="flex-row items-center gap-2 mb-4">
+                <User size={16} color="#C4A77D" strokeWidth={1.5} />
+                <Text className="text-xs tracking-widest text-charcoal-muted uppercase">
+                  Virtual Try-On
+                </Text>
+              </View>
+
+              {/* Try-On Visualization */}
+              {tryOnVisualization && (
+                <View className="mb-4">
+                  <View
+                    className="bg-cream-200 overflow-hidden"
+                    style={{ width: "100%", aspectRatio: 3/4, borderRadius: 4 }}
+                  >
+                    <Image
+                      source={{ uri: tryOnVisualization.visualizationUrl }}
+                      contentFit="cover"
+                      style={{ width: "100%", height: "100%" }}
+                    />
+                  </View>
+                  <Text className="text-xs text-charcoal-muted text-center mt-2">
+                    Virtual try-on preview
+                  </Text>
+                </View>
+              )}
+
+              {/* Try-On Error */}
+              {tryOnError && (
+                <View className="flex-row items-center gap-2 p-3 bg-cream-50 border border-charcoal/10 mb-4">
+                  <AlertCircle size={16} color="#6B6B6B" strokeWidth={1.5} />
+                  <Text className="text-charcoal-muted text-sm flex-1">{tryOnError}</Text>
+                </View>
+              )}
+
+              {/* Try It On Button */}
+              <Pressable
+                onPress={handleTryOn}
+                disabled={isGeneratingTryOn}
+                className={`py-4 flex-row items-center justify-center gap-2 ${
+                  isGeneratingTryOn ? "bg-cream-200" : "bg-charcoal active:opacity-80"
+                }`}
+              >
+                {isGeneratingTryOn ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text className="text-white text-xs tracking-widest uppercase">
+                      Generating Try-On...
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <User size={16} color="#FFFFFF" strokeWidth={1.5} />
+                    <Text className="text-white text-xs tracking-widest uppercase">
+                      {tryOnVisualization ? "Regenerate Try-On" : "Try It On"}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+
+              {!profile?.personalModelUrl && (
+                <Text className="text-xs text-charcoal-muted mt-3 text-center">
+                  Create your personal model in Settings to use Try-On
+                </Text>
+              )}
             </View>
           </View>
         )}

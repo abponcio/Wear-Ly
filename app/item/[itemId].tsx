@@ -10,24 +10,43 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image } from "expo-image";
-import { ChevronLeft, Trash2 } from "lucide-react-native";
+import { ChevronLeft, Trash2, Check } from "lucide-react-native";
 import { useWardrobe } from "@/hooks/useWardrobe";
+import { updateItemGender } from "@/services/supabase";
+import type { Gender } from "@/types/wardrobe";
+
+const GENDER_OPTIONS: { value: Gender; label: string }[] = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "unisex", label: "Unisex" },
+];
 
 export default function ItemDetailScreen() {
   const { itemId } = useLocalSearchParams<{ itemId: string }>();
   const router = useRouter();
-  const { items, deleteItem, isLoading: isLoadingWardrobe } = useWardrobe();
+  const { items, deleteItem, refreshItems, isLoading: isLoadingWardrobe } = useWardrobe();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleted, setIsDeleted] = useState(false); // Track intentional deletion
+  const [isSavingGender, setIsSavingGender] = useState(false);
+  const [selectedGender, setSelectedGender] = useState<Gender | null>(null);
 
   const item = items.find((i) => i.id === itemId);
 
+  // Initialize selected gender from item
   useEffect(() => {
-    if (!isLoadingWardrobe && !item) {
+    if (item?.gender) {
+      setSelectedGender(item.gender);
+    }
+  }, [item?.gender]);
+
+  // Only show "Item Not Found" if not loading, item doesn't exist, AND we didn't just delete it
+  useEffect(() => {
+    if (!isLoadingWardrobe && !item && !isDeleting && !isDeleted) {
       Alert.alert("Item Not Found", "This item could not be found.", [
         { text: "OK", onPress: () => router.back() },
       ]);
     }
-  }, [item, isLoadingWardrobe, router]);
+  }, [item, isLoadingWardrobe, isDeleting, isDeleted, router]);
 
   const handleDelete = () => {
     if (!item) return;
@@ -45,15 +64,15 @@ export default function ItemDetailScreen() {
           style: "destructive",
           onPress: async () => {
             setIsDeleting(true);
+            setIsDeleted(true); // Mark as intentionally deleted
             try {
               await deleteItem(item.id);
-              Alert.alert("Removed", "Item has been removed.", [
-                { text: "OK", onPress: () => router.back() },
-              ]);
+              // Navigate back immediately on success - no alert needed
+              router.back();
             } catch (error) {
-              Alert.alert("Error", "Failed to remove item. Please try again.", [
-                { text: "OK" },
-              ]);
+              setIsDeleted(false); // Reset if deletion failed
+              console.error("Delete error:", error);
+              Alert.alert("Error", "Failed to remove item. Please try again.");
             } finally {
               setIsDeleting(false);
             }
@@ -61,6 +80,25 @@ export default function ItemDetailScreen() {
         },
       ]
     );
+  };
+
+  const handleGenderChange = async (gender: Gender) => {
+    if (!item || isSavingGender) return;
+
+    const previousGender = selectedGender;
+    setSelectedGender(gender);
+    setIsSavingGender(true);
+
+    try {
+      await updateItemGender(item.id, gender);
+      await refreshItems();
+    } catch (error) {
+      console.error("Error updating gender:", error);
+      setSelectedGender(previousGender);
+      Alert.alert("Error", "Failed to update gender. Please try again.");
+    } finally {
+      setIsSavingGender(false);
+    }
   };
 
   if (isLoadingWardrobe) {
@@ -152,6 +190,48 @@ export default function ItemDetailScreen() {
               </Text>
               <Text className="text-charcoal text-sm">{item.material}</Text>
             </View>
+          </View>
+
+          {/* Gender Selection */}
+          <View className="mb-6">
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-xs tracking-widest text-charcoal-muted uppercase">
+                Fit Type
+              </Text>
+              {isSavingGender && (
+                <ActivityIndicator size="small" color="#C4A77D" />
+              )}
+            </View>
+            <View className="flex-row gap-2">
+              {GENDER_OPTIONS.map((option) => (
+                <Pressable
+                  key={option.value}
+                  onPress={() => handleGenderChange(option.value)}
+                  disabled={isSavingGender}
+                  className={`flex-1 py-3 flex-row items-center justify-center gap-2 border ${
+                    selectedGender === option.value
+                      ? "bg-charcoal border-charcoal"
+                      : "bg-white border-cream-300"
+                  } active:opacity-80`}
+                >
+                  {selectedGender === option.value && (
+                    <Check size={14} color="#FFFFFF" strokeWidth={2} />
+                  )}
+                  <Text
+                    className={`text-xs tracking-wide uppercase ${
+                      selectedGender === option.value
+                        ? "text-white"
+                        : "text-charcoal"
+                    }`}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text className="text-[10px] text-charcoal-muted mt-2">
+              Helps match clothing to your profile for virtual try-on
+            </Text>
           </View>
 
           {/* Attributes */}
