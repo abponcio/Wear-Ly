@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   Sparkles,
   Cloud,
@@ -49,7 +50,7 @@ const WEATHER_OPTIONS = [
 
 export default function OOTDScreen() {
   const router = useRouter();
-  const { items, isLoading: itemsLoading, error: itemsError } = useWardrobe();
+  const { items, isLoading: itemsLoading, error: itemsError, refreshItems } = useWardrobe();
   const { generateOutfitSuggestion, isLoading, error, currentOutfit } =
     useOutfitGeneration(items);
   const { saveOutfit, isSaving, outfits } = useOutfitHistory();
@@ -63,6 +64,13 @@ export default function OOTDScreen() {
   const [isGeneratingTryOn, setIsGeneratingTryOn] = useState(false);
   const [tryOnVisualization, setTryOnVisualization] = useState<OutfitVisualization | null>(null);
   const [tryOnError, setTryOnError] = useState<string | null>(null);
+
+  // Refresh wardrobe items when screen comes into focus (sync with closet/upload)
+  useFocusEffect(
+    useCallback(() => {
+      refreshItems();
+    }, [refreshItems])
+  );
 
   // Load profile on mount
   useEffect(() => {
@@ -259,9 +267,9 @@ export default function OOTDScreen() {
           {/* Generate Button */}
           <Pressable
             onPress={handleGenerate}
-            disabled={isLoading || items.length < 3}
+            disabled={isLoading || items.length < 2}
             className={`mt-6 py-4 flex-row items-center justify-center gap-2 ${
-              isLoading || items.length < 3
+              isLoading || items.length < 2
                 ? "bg-cream-200"
                 : "bg-gold active:opacity-80"
             }`}
@@ -283,9 +291,9 @@ export default function OOTDScreen() {
             )}
           </Pressable>
 
-          {items.length < 3 && (
+          {items.length < 2 && (
             <Text className="text-xs text-charcoal-muted mt-3 text-center">
-              Add at least 3 items to your closet first
+              Add at least 2 items to your closet first
             </Text>
           )}
         </View>
@@ -348,6 +356,16 @@ export default function OOTDScreen() {
               <Text className="text-charcoal text-sm leading-6 italic">
                 "{currentOutfit.suggestion}"
               </Text>
+              {currentOutfit.stylistNote && (
+                <View className="mt-3 pt-3 border-t border-cream-200">
+                  <Text className="text-[10px] tracking-widest text-gold-dark uppercase mb-1">
+                    Stylist Tip
+                  </Text>
+                  <Text className="text-charcoal-muted text-xs leading-5">
+                    {currentOutfit.stylistNote}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Outfit Items Grid */}

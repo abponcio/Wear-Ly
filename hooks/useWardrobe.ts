@@ -118,9 +118,9 @@ export const useOutfitGeneration = (
 
   const generateOutfitSuggestion = useCallback(
     async (context: OutfitContext): Promise<OutfitSuggestion | null> => {
-      if (wardrobeItems.length < 3) {
+      if (wardrobeItems.length < 2) {
         setError(
-          "You need at least 3 items in your wardrobe to generate an outfit"
+          "You need at least 2 items in your wardrobe to generate an outfit"
         );
         return null;
       }

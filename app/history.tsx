@@ -23,10 +23,13 @@ import {
   Shirt,
   User,
   X,
+  Eye,
+  RefreshCw,
+  Sparkles,
 } from "lucide-react-native";
 import { useOutfitHistory, populateOutfitItems } from "@/hooks/useOutfitHistory";
 import { useWardrobe } from "@/hooks/useWardrobe";
-import { getUserProfile } from "@/services/supabase";
+import { getUserProfile, getVisualizationByItemIds } from "@/services/supabase";
 import { getTryOnVisualization, checkGenderCompatibility } from "@/services/tryon";
 import type { Outfit, WardrobeItem, UserProfile, OutfitVisualization } from "@/types/wardrobe";
 
@@ -42,13 +45,28 @@ const WEATHER_ICONS: Record<string, React.ElementType> = {
 interface OutfitCardProps {
   outfit: Outfit;
   items: WardrobeItem[];
+  visualization: OutfitVisualization | null;
   onDelete: () => void;
-  onVisualize: () => void;
+  onGenerateTryOn: () => void;
+  onRegenerateTryOn: () => void;
+  onSeeItems: () => void;
   isDeleting: boolean;
+  isGenerating: boolean;
   hasPersonalModel: boolean;
 }
 
-function OutfitCard({ outfit, items, onDelete, onVisualize, isDeleting, hasPersonalModel }: OutfitCardProps) {
+function OutfitCard({
+  outfit,
+  items,
+  visualization,
+  onDelete,
+  onGenerateTryOn,
+  onRegenerateTryOn,
+  onSeeItems,
+  isDeleting,
+  isGenerating,
+  hasPersonalModel,
+}: OutfitCardProps) {
   const WeatherIcon = outfit.weather
     ? WEATHER_ICONS[outfit.weather] || Cloud
     : Cloud;
@@ -76,31 +94,45 @@ function OutfitCard({ outfit, items, onDelete, onVisualize, isDeleting, hasPerso
     });
   };
 
+  const hasVisualization = !!visualization?.visualizationUrl;
+
   return (
-    <View className="bg-white border border-cream-200 mb-4">
-      {/* Item Images Row */}
-      <View className="flex-row">
-        {items.slice(0, 3).map((item) => (
-          <View key={item.id} className="flex-1 aspect-square bg-cream-100">
-            <Image
-              source={{ uri: item.isolatedImageUrl || item.imageUrl }}
-              contentFit="cover"
-              style={{ width: "100%", height: "100%" }}
-            />
-          </View>
-        ))}
-        {items.length < 3 &&
-          Array(3 - items.length)
-            .fill(0)
-            .map((_, index) => (
-              <View
-                key={`placeholder-${index}`}
-                className="flex-1 aspect-square bg-cream-200 items-center justify-center"
-              >
-                <Shirt size={20} color="#6B6B6B" strokeWidth={1} />
-              </View>
-            ))}
-      </View>
+    <View className="bg-white border border-cream-200 mb-4 overflow-hidden">
+      {/* Primary Display - Try-On or Item Grid Fallback */}
+      {hasVisualization ? (
+        // Full-width try-on image
+        <View style={{ width: "100%", aspectRatio: 3 / 4 }} className="bg-cream-100">
+          <Image
+            source={{ uri: visualization.visualizationUrl }}
+            contentFit="cover"
+            style={{ width: "100%", height: "100%" }}
+          />
+        </View>
+      ) : (
+        // Fallback: Item thumbnails grid
+        <View className="flex-row">
+          {items.slice(0, 4).map((item) => (
+            <View key={item.id} className="flex-1 aspect-square bg-cream-100">
+              <Image
+                source={{ uri: item.isolatedImageUrl || item.imageUrl }}
+                contentFit="cover"
+                style={{ width: "100%", height: "100%" }}
+              />
+            </View>
+          ))}
+          {items.length < 4 &&
+            Array(Math.max(0, 4 - items.length))
+              .fill(0)
+              .map((_, index) => (
+                <View
+                  key={`placeholder-${index}`}
+                  className="flex-1 aspect-square bg-cream-200 items-center justify-center"
+                >
+                  <Shirt size={16} color="#6B6B6B" strokeWidth={1} />
+                </View>
+              ))}
+        </View>
+      )}
 
       {/* Outfit Details */}
       <View className="p-4">
@@ -121,12 +153,17 @@ function OutfitCard({ outfit, items, onDelete, onVisualize, isDeleting, hasPerso
               </Text>
             </View>
           )}
+          <View className="border border-charcoal/10 px-2 py-1">
+            <Text className="text-[10px] tracking-wide uppercase text-charcoal-muted">
+              {items.length} items
+            </Text>
+          </View>
         </View>
 
         {/* Suggestion Text */}
         {outfit.geminiSuggestion && (
           <Text
-            className="text-charcoal text-sm leading-5 italic mb-3"
+            className="text-charcoal text-sm leading-5 italic mb-4"
             numberOfLines={2}
           >
             "{outfit.geminiSuggestion}"
@@ -134,38 +171,67 @@ function OutfitCard({ outfit, items, onDelete, onVisualize, isDeleting, hasPerso
         )}
 
         {/* Action Buttons */}
+        <View className="flex-row gap-2 mb-3">
+          {/* See Items Button */}
+          <Pressable
+            onPress={onSeeItems}
+            className="flex-1 flex-row items-center justify-center gap-2 py-3 border border-charcoal/20 active:opacity-50"
+          >
+            <Eye size={14} color="#1A1A1A" strokeWidth={1.5} />
+            <Text className="text-xs tracking-wide uppercase text-charcoal">
+              See Items ({items.length})
+            </Text>
+          </Pressable>
+
+          {/* Generate/Regenerate Try-On Button */}
+          {hasPersonalModel && (
+            <Pressable
+              onPress={hasVisualization ? onRegenerateTryOn : onGenerateTryOn}
+              disabled={isGenerating}
+              className={`flex-1 flex-row items-center justify-center gap-2 py-3 ${
+                hasVisualization
+                  ? "border border-charcoal/20"
+                  : "bg-charcoal"
+              } active:opacity-50`}
+            >
+              {isGenerating ? (
+                <ActivityIndicator size="small" color={hasVisualization ? "#1A1A1A" : "#FFFFFF"} />
+              ) : hasVisualization ? (
+                <>
+                  <RefreshCw size={14} color="#1A1A1A" strokeWidth={1.5} />
+                  <Text className="text-xs tracking-wide uppercase text-charcoal">
+                    Regenerate
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} color="#FFFFFF" strokeWidth={1.5} />
+                  <Text className="text-xs tracking-wide uppercase text-white">
+                    Generate Try-On
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          )}
+        </View>
+
+        {/* Bottom Row: Date and Delete */}
         <View className="flex-row items-center justify-between pt-3 border-t border-cream-200">
           <Text className="text-xs text-charcoal-muted">
             {formatDate(outfit.createdAt)}
           </Text>
 
-          <View className="flex-row items-center gap-2">
-            {/* Visualize Button */}
-            {hasPersonalModel && items.length > 0 && (
-              <Pressable
-                onPress={onVisualize}
-                className="flex-row items-center gap-1 px-3 py-2 border border-charcoal/20 active:opacity-50"
-              >
-                <User size={14} color="#1A1A1A" strokeWidth={1.5} />
-                <Text className="text-xs tracking-wide uppercase text-charcoal">
-                  Try On
-                </Text>
-              </Pressable>
+          <Pressable
+            onPress={handleDelete}
+            disabled={isDeleting}
+            className="p-2 -mr-2 active:opacity-50"
+          >
+            {isDeleting ? (
+              <ActivityIndicator size="small" color="#1A1A1A" />
+            ) : (
+              <Trash2 size={16} color="#1A1A1A" strokeWidth={1.5} />
             )}
-
-            {/* Delete Button */}
-            <Pressable
-              onPress={handleDelete}
-              disabled={isDeleting}
-              className="p-2 active:opacity-50"
-            >
-              {isDeleting ? (
-                <ActivityIndicator size="small" color="#1A1A1A" />
-              ) : (
-                <Trash2 size={16} color="#1A1A1A" strokeWidth={1.5} />
-              )}
-            </Pressable>
-          </View>
+          </Pressable>
         </View>
       </View>
     </View>
@@ -184,13 +250,19 @@ export default function HistoryScreen() {
     isDeleting,
   } = useOutfitHistory();
 
-  // Try-On state
+  // Profile state
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isGeneratingTryOn, setIsGeneratingTryOn] = useState(false);
-  const [tryOnVisualization, setTryOnVisualization] = useState<OutfitVisualization | null>(null);
-  const [showTryOnModal, setShowTryOnModal] = useState(false);
-  const [tryOnError, setTryOnError] = useState<string | null>(null);
-  const [currentTryOnItems, setCurrentTryOnItems] = useState<WardrobeItem[]>([]);
+
+  // Visualization cache state - map of outfit ID to visualization
+  const [visualizations, setVisualizations] = useState<Record<string, OutfitVisualization | null>>({});
+  const [loadingVisualizations, setLoadingVisualizations] = useState(true);
+
+  // Try-On generation state
+  const [generatingOutfitId, setGeneratingOutfitId] = useState<string | null>(null);
+
+  // Items modal state
+  const [showItemsModal, setShowItemsModal] = useState(false);
+  const [selectedOutfitItems, setSelectedOutfitItems] = useState<WardrobeItem[]>([]);
 
   // Load profile on mount
   useEffect(() => {
@@ -209,6 +281,36 @@ export default function HistoryScreen() {
     return outfits.map((outfit) => populateOutfitItems(outfit, wardrobeItems));
   }, [outfits, wardrobeItems]);
 
+  // Fetch visualizations for all outfits
+  useEffect(() => {
+    const fetchVisualizations = async () => {
+      if (populatedOutfits.length === 0) {
+        setLoadingVisualizations(false);
+        return;
+      }
+
+      setLoadingVisualizations(true);
+      const vizMap: Record<string, OutfitVisualization | null> = {};
+
+      await Promise.all(
+        populatedOutfits.map(async (outfit) => {
+          try {
+            const viz = await getVisualizationByItemIds(outfit.itemIds);
+            vizMap[outfit.id] = viz;
+          } catch (err) {
+            console.error(`Error fetching visualization for outfit ${outfit.id}:`, err);
+            vizMap[outfit.id] = null;
+          }
+        })
+      );
+
+      setVisualizations(vizMap);
+      setLoadingVisualizations(false);
+    };
+
+    fetchVisualizations();
+  }, [populatedOutfits]);
+
   const handleDeleteOutfit = async (outfitId: string) => {
     const success = await deleteOutfit(outfitId);
     if (!success) {
@@ -216,73 +318,73 @@ export default function HistoryScreen() {
     }
   };
 
-  const handleVisualize = useCallback(async (outfit: Outfit, items: WardrobeItem[]) => {
-    if (!profile?.personalModelUrl) {
-      Alert.alert(
-        "Personal Model Required",
-        "Please create your personal model in Settings first.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Go to Settings", onPress: () => router.push("/settings") },
-        ]
-      );
-      return;
-    }
+  const handleGenerateTryOn = useCallback(
+    async (outfit: Outfit, items: WardrobeItem[], forceRegenerate: boolean = false) => {
+      if (!profile?.personalModelUrl) {
+        Alert.alert(
+          "Personal Model Required",
+          "Please create your personal model in Settings first.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Go to Settings", onPress: () => router.push("/settings") },
+          ]
+        );
+        return;
+      }
 
-    // Check gender compatibility
-    const compatibility = checkGenderCompatibility(profile.gender, items);
-    if (!compatibility.isCompatible) {
-      const incompatibleNames = compatibility.incompatibleItems
-        .map(i => `${i.color} ${i.subcategory}`)
-        .join(", ");
-      Alert.alert(
-        "Clothing Mismatch",
-        `Some items may not fit well: ${incompatibleNames}. Continue anyway?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Continue", onPress: () => generateVisualization(items) },
-        ]
-      );
-      return;
-    }
+      // Check gender compatibility
+      const compatibility = checkGenderCompatibility(profile.gender, items);
+      if (!compatibility.isCompatible && !forceRegenerate) {
+        const incompatibleNames = compatibility.incompatibleItems
+          .map((i) => `${i.color} ${i.subcategory}`)
+          .join(", ");
+        Alert.alert(
+          "Clothing Mismatch",
+          `Some items may not fit well: ${incompatibleNames}. Continue anyway?`,
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Continue", onPress: () => handleGenerateTryOn(outfit, items, true) },
+          ]
+        );
+        return;
+      }
 
-    generateVisualization(items, false);
-  }, [profile, router]);
+      setGeneratingOutfitId(outfit.id);
 
-  const generateVisualization = async (items: WardrobeItem[], forceRegenerate: boolean = false) => {
-    if (!profile?.personalModelUrl) return;
+      try {
+        const visualization = await getTryOnVisualization(
+          profile.personalModelUrl,
+          items,
+          forceRegenerate
+        );
+        // Update the visualization cache
+        setVisualizations((prev) => ({
+          ...prev,
+          [outfit.id]: visualization,
+        }));
+      } catch (err) {
+        console.error("Error generating try-on:", err);
+        Alert.alert("Error", "Failed to generate try-on. Please try again.");
+      } finally {
+        setGeneratingOutfitId(null);
+      }
+    },
+    [profile, router]
+  );
 
-    setCurrentTryOnItems(items);
-    setIsGeneratingTryOn(true);
-    setTryOnError(null);
-    setShowTryOnModal(true);
-
-    try {
-      const visualization = await getTryOnVisualization(
-        profile.personalModelUrl,
-        items,
-        forceRegenerate
-      );
-      setTryOnVisualization(visualization);
-    } catch (err) {
-      console.error("Error generating try-on:", err);
-      setTryOnError("Failed to generate try-on. Please try again.");
-    } finally {
-      setIsGeneratingTryOn(false);
-    }
+  const handleSeeItems = (items: WardrobeItem[]) => {
+    setSelectedOutfitItems(items);
+    setShowItemsModal(true);
   };
 
-  const handleRegenerate = () => {
-    if (currentTryOnItems.length > 0 && !isGeneratingTryOn) {
-      setTryOnVisualization(null);
-      generateVisualization(currentTryOnItems, true);
-    }
+  const closeItemsModal = () => {
+    setShowItemsModal(false);
+    setSelectedOutfitItems([]);
   };
 
-  const closeTryOnModal = () => {
-    setShowTryOnModal(false);
-    setTryOnVisualization(null);
-    setTryOnError(null);
+  const navigateToItem = (itemId: string) => {
+    closeItemsModal();
+    router.push(`/item/${itemId}`);
   };
 
   return (
@@ -304,7 +406,7 @@ export default function HistoryScreen() {
       </View>
 
       {/* Content */}
-      {isLoading || itemsLoading ? (
+      {isLoading || itemsLoading || loadingVisualizations ? (
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="small" color="#1A1A1A" />
           <Text className="text-charcoal-muted text-xs tracking-wide uppercase mt-4">
@@ -314,10 +416,7 @@ export default function HistoryScreen() {
       ) : error ? (
         <View className="flex-1 justify-center items-center px-8">
           <Text className="text-charcoal text-center mb-4">{error}</Text>
-          <Pressable
-            onPress={refreshOutfits}
-            className="bg-charcoal px-6 py-3"
-          >
+          <Pressable onPress={refreshOutfits} className="bg-charcoal px-6 py-3">
             <Text className="text-white text-xs tracking-widest uppercase">
               Try Again
             </Text>
@@ -362,9 +461,13 @@ export default function HistoryScreen() {
               key={outfit.id}
               outfit={outfit}
               items={outfit.items || []}
+              visualization={visualizations[outfit.id] || null}
               onDelete={() => handleDeleteOutfit(outfit.id)}
-              onVisualize={() => handleVisualize(outfit, outfit.items || [])}
+              onGenerateTryOn={() => handleGenerateTryOn(outfit, outfit.items || [])}
+              onRegenerateTryOn={() => handleGenerateTryOn(outfit, outfit.items || [], true)}
+              onSeeItems={() => handleSeeItems(outfit.items || [])}
               isDeleting={isDeleting}
+              isGenerating={generatingOutfitId === outfit.id}
               hasPersonalModel={!!profile?.personalModelUrl}
             />
           ))}
@@ -373,84 +476,54 @@ export default function HistoryScreen() {
         </ScrollView>
       )}
 
-      {/* Try-On Modal */}
+      {/* Items Modal */}
       <Modal
-        visible={showTryOnModal}
+        visible={showItemsModal}
         animationType="slide"
         transparent={true}
-        onRequestClose={closeTryOnModal}
+        onRequestClose={closeItemsModal}
       >
         <View className="flex-1 bg-black/50 justify-end">
-          <View className="bg-cream-100 rounded-t-3xl" style={{ maxHeight: "85%" }}>
+          <View className="bg-cream-100 rounded-t-3xl" style={{ maxHeight: "70%" }}>
             {/* Modal Header */}
             <View className="flex-row items-center justify-between px-5 py-4 border-b border-cream-200">
               <Text className="text-charcoal text-base tracking-wide">
-                Virtual Try-On
+                Outfit Items ({selectedOutfitItems.length})
               </Text>
-              <Pressable onPress={closeTryOnModal} className="p-2 active:opacity-50">
+              <Pressable onPress={closeItemsModal} className="p-2 active:opacity-50">
                 <X size={20} color="#1A1A1A" strokeWidth={1.5} />
               </Pressable>
             </View>
 
-            {/* Modal Content */}
+            {/* Items Grid */}
             <ScrollView className="p-5">
-              {isGeneratingTryOn ? (
-                <View className="items-center py-12">
-                  <ActivityIndicator size="large" color="#1A1A1A" />
-                  <Text className="text-charcoal-muted text-sm mt-4 text-center">
-                    Generating your virtual try-on...
-                  </Text>
-                  <Text className="text-charcoal-muted/60 text-xs mt-2 text-center">
-                    This may take a moment
-                  </Text>
-                </View>
-              ) : tryOnError ? (
-                <View className="items-center py-12">
-                  <Text className="text-charcoal text-sm text-center mb-4">{tryOnError}</Text>
+              <View className="flex-row flex-wrap gap-3">
+                {selectedOutfitItems.map((item) => (
                   <Pressable
-                    onPress={closeTryOnModal}
-                    className="bg-charcoal px-6 py-3"
+                    key={item.id}
+                    onPress={() => navigateToItem(item.id)}
+                    className="bg-white border border-cream-200 overflow-hidden active:opacity-70"
+                    style={{ width: "47%" }}
                   >
-                    <Text className="text-white text-xs tracking-widest uppercase">
-                      Close
-                    </Text>
+                    <View className="aspect-[3/4] bg-cream-100">
+                      <Image
+                        source={{ uri: item.isolatedImageUrl || item.imageUrl }}
+                        contentFit="cover"
+                        style={{ width: "100%", height: "100%" }}
+                      />
+                    </View>
+                    <View className="p-2">
+                      <Text className="text-[10px] tracking-widest text-charcoal-muted uppercase">
+                        {item.category}
+                      </Text>
+                      <Text className="text-sm text-charcoal" numberOfLines={1}>
+                        {item.subcategory}
+                      </Text>
+                      <Text className="text-xs text-charcoal-muted">{item.color}</Text>
+                    </View>
                   </Pressable>
-                </View>
-              ) : tryOnVisualization ? (
-                <View className="items-center">
-                  <View
-                    className="bg-cream-200 overflow-hidden"
-                    style={{ width: "100%", aspectRatio: 3/4, borderRadius: 8 }}
-                  >
-                    <Image
-                      source={{ uri: tryOnVisualization.visualizationUrl }}
-                      contentFit="cover"
-                      style={{ width: "100%", height: "100%" }}
-                    />
-                  </View>
-                  <Text className="text-xs text-charcoal-muted text-center mt-4">
-                    Virtual try-on preview
-                  </Text>
-                  <View className="flex-row gap-3 mt-6">
-                    <Pressable
-                      onPress={handleRegenerate}
-                      className="flex-1 border border-charcoal px-6 py-4 active:opacity-80"
-                    >
-                      <Text className="text-charcoal text-xs tracking-widest uppercase text-center">
-                        Regenerate
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={closeTryOnModal}
-                      className="flex-1 bg-charcoal px-6 py-4 active:opacity-80"
-                    >
-                      <Text className="text-white text-xs tracking-widest uppercase text-center">
-                        Done
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ) : null}
+                ))}
+              </View>
 
               <View className="h-8" />
             </ScrollView>

@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { View, Text, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import WardrobeGrid from "@/components/WardrobeGrid";
 import { useWardrobe } from "@/hooks/useWardrobe";
 import type { WardrobeItem } from "@/types/wardrobe";
@@ -10,16 +11,12 @@ export default function WardrobeScreen() {
   const router = useRouter();
   const { items, isLoading, error, refreshItems } = useWardrobe();
 
-  // Debug: Log items and their image URLs
-  React.useEffect(() => {
-    if (items.length > 0) {
-      console.log("Loaded items:", items.map(i => ({
-        id: i.id,
-        imageUrl: i.imageUrl,
-        isolatedImageUrl: i.isolatedImageUrl,
-      })));
-    }
-  }, [items]);
+  // Refresh items when screen comes into focus (sync with other screens)
+  useFocusEffect(
+    useCallback(() => {
+      refreshItems();
+    }, [refreshItems])
+  );
 
   const handleItemPress = (item: WardrobeItem) => {
     router.push(`/item/${item.id}`);

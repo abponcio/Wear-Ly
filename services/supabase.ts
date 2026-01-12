@@ -596,6 +596,49 @@ export const getCachedVisualization = async (
 };
 
 /**
+ * Gets a cached outfit visualization by item IDs
+ * Looks up visualization that contains the same set of items
+ * @param itemIds - Array of item IDs to match
+ * @returns Cached visualization or null
+ */
+export const getVisualizationByItemIds = async (
+  itemIds: string[]
+): Promise<OutfitVisualization | null> => {
+  // Sort item IDs for consistent matching
+  const sortedIds = [...itemIds].sort();
+
+  const { data, error } = await supabase
+    .from("outfit_visualizations")
+    .select("*")
+    .contains("item_ids", sortedIds)
+    .single();
+
+  if (error && error.code !== "PGRST116") {
+    // PGRST116 is "no rows returned" - not a real error
+    return null;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  // Verify exact match (contains might return supersets)
+  const dataItemsSorted = [...data.item_ids].sort();
+  if (JSON.stringify(dataItemsSorted) !== JSON.stringify(sortedIds)) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    combinationHash: data.combination_hash,
+    itemIds: data.item_ids,
+    visualizationUrl: data.visualization_url,
+    createdAt: data.created_at,
+  };
+};
+
+/**
  * Saves a new outfit visualization to the cache
  * @param combinationHash - Hash of profile + sorted item IDs
  * @param itemIds - Array of item IDs in the outfit

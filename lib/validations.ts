@@ -11,6 +11,7 @@ export const GenderSchema = z.enum(['male', 'female', 'unisex']);
 
 /**
  * Schema for validating a single clothing item metadata
+ * Includes detailed garment attributes for accurate image generation
  */
 export const WardrobeItemMetadataSchema = z.object({
   category: z.string().min(1, 'Category is required'),
@@ -19,6 +20,12 @@ export const WardrobeItemMetadataSchema = z.object({
   material: z.string().min(1, 'Material is required'),
   attributes: z.array(z.string()).default([]),
   gender: GenderSchema.optional().default('unisex'),
+  // Detailed garment attributes for accurate image generation
+  sleeveLength: z.string().optional(), // "short", "long", "sleeveless", "3/4", "cap"
+  fit: z.string().optional(), // "slim", "regular", "relaxed", "oversized", "cropped"
+  neckline: z.string().optional(), // "crew", "v-neck", "polo", "mock", "turtleneck", "scoop", "henley"
+  pattern: z.string().optional(), // "solid", "striped", "plaid", "printed", "graphic", "checkered"
+  length: z.string().optional(), // "cropped", "regular", "long", "mini", "midi", "maxi", "ankle"
 });
 
 /**
@@ -30,10 +37,12 @@ export const DetectedClothingItemsSchema = z.object({
 
 /**
  * Schema for validating Gemini AI outfit suggestion response
+ * Flexible: allows 2-7 items for complete outfit looks
  */
 export const OutfitSuggestionSchema = z.object({
-  itemIds: z.array(z.string().uuid('Invalid UUID format')).length(3, 'Must suggest exactly 3 items'),
+  itemIds: z.array(z.string().uuid('Invalid UUID format')).min(2, 'At least 2 items required').max(7, 'Maximum 7 items'),
   suggestion: z.string().min(1, 'Suggestion text is required'),
+  stylistNote: z.string().optional(), // Optional styling tip from the AI stylist
 });
 
 /**

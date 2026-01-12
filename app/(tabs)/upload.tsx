@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import {
   Camera,
@@ -18,10 +19,13 @@ import {
   CheckSquare,
   Square,
   ChevronRight,
+  CheckCircle,
+  Plus,
 } from "lucide-react-native";
 import { useUploadItem, type DetectedItem } from "@/hooks/useUploadItem";
 import { useWardrobe } from "@/hooks/useWardrobe";
 import { Image } from "expo-image";
+import type { WardrobeItem } from "@/types/wardrobe";
 
 const UPLOAD_STEPS = [
   { key: "generating-images", label: "Generating" },
@@ -40,6 +44,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function UploadScreen() {
+  const router = useRouter();
   const {
     analyzeImage,
     processSelectedItems,
@@ -59,7 +64,7 @@ export default function UploadScreen() {
   const { refreshItems } = useWardrobe();
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [itemsCreated, setItemsCreated] = useState(0);
+  const [createdItems, setCreatedItems] = useState<WardrobeItem[]>([]);
 
   const requestPermissions = async () => {
     const { status: cameraStatus } =
@@ -104,7 +109,7 @@ export default function UploadScreen() {
         const imageUri = result.assets[0].uri;
         setSelectedImage(imageUri);
         setUploadSuccess(false);
-        setItemsCreated(0);
+        setCreatedItems([]);
         resetError();
 
         // Immediately analyze the image
@@ -126,29 +131,38 @@ export default function UploadScreen() {
     }
 
     setUploadSuccess(false);
-    setItemsCreated(0);
+    setCreatedItems([]);
     resetError();
 
     const items = await processSelectedItems(selectedImage);
 
     if (items.length > 0) {
       setUploadSuccess(true);
-      setItemsCreated(items.length);
+      setCreatedItems(items);
       setSelectedImage(null);
       await refreshItems();
-
-      const message =
-        items.length === 1
-          ? "1 item has been added to your closet."
-          : `${items.length} items have been added to your closet.`;
-      Alert.alert("Added", message);
+      // No Alert - inline success card will show instead
     }
+  };
+
+  const handleAddMore = () => {
+    setUploadSuccess(false);
+    setCreatedItems([]);
+    resetState();
+  };
+
+  const handleViewCloset = () => {
+    setUploadSuccess(false);
+    setCreatedItems([]);
+    resetState();
+    // Navigate to closet tab (index)
+    router.push("/(tabs)");
   };
 
   const clearSelection = () => {
     setSelectedImage(null);
     setUploadSuccess(false);
-    setItemsCreated(0);
+    setCreatedItems([]);
     resetState();
   };
 
@@ -451,14 +465,69 @@ export default function UploadScreen() {
             </View>
           )}
 
-          {/* Success Message */}
-          {uploadSuccess && (
-            <View className="mt-4 p-4 border border-gold/30 bg-gold/5">
-              <Text className="text-charcoal text-sm text-center">
-                {itemsCreated === 1
-                  ? "1 item added successfully"
-                  : `${itemsCreated} items added successfully`}
-              </Text>
+          {/* Success Card */}
+          {uploadSuccess && createdItems.length > 0 && (
+            <View className="border border-gold/30 bg-white p-6">
+              {/* Success Header */}
+              <View className="items-center mb-6">
+                <View className="w-12 h-12 rounded-full bg-gold/10 items-center justify-center mb-3">
+                  <CheckCircle size={24} color="#C4A77D" strokeWidth={1.5} />
+                </View>
+                <Text className="text-charcoal text-base font-medium">
+                  {createdItems.length === 1
+                    ? "1 item added"
+                    : `${createdItems.length} items added`}
+                </Text>
+                <Text className="text-charcoal-muted text-xs mt-1">
+                  to your closet
+                </Text>
+              </View>
+
+              {/* Item Thumbnails */}
+              <View className="flex-row justify-center gap-2 mb-6">
+                {createdItems.slice(0, 4).map((item) => (
+                  <View
+                    key={item.id}
+                    className="w-16 h-20 bg-cream-200 overflow-hidden"
+                  >
+                    <Image
+                      source={{ uri: item.isolatedImageUrl || item.imageUrl }}
+                      contentFit="cover"
+                      style={{ width: "100%", height: "100%" }}
+                    />
+                  </View>
+                ))}
+                {createdItems.length > 4 && (
+                  <View className="w-16 h-20 bg-cream-200 items-center justify-center">
+                    <Text className="text-charcoal-muted text-xs">
+                      +{createdItems.length - 4}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Action Buttons */}
+              <View className="flex-row gap-3">
+                <Pressable
+                  onPress={handleAddMore}
+                  className="flex-1 py-4 flex-row items-center justify-center gap-2 border border-charcoal active:opacity-80"
+                >
+                  <Plus size={16} color="#1A1A1A" strokeWidth={1.5} />
+                  <Text className="text-charcoal text-xs tracking-widest uppercase">
+                    Add More
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={handleViewCloset}
+                  className="flex-1 py-4 flex-row items-center justify-center gap-2 bg-charcoal active:opacity-80"
+                >
+                  <Text className="text-white text-xs tracking-widest uppercase">
+                    View Closet
+                  </Text>
+                  <ChevronRight size={14} color="#FFFFFF" strokeWidth={1.5} />
+                </Pressable>
+              </View>
             </View>
           )}
 

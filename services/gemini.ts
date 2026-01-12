@@ -15,7 +15,11 @@ import {
   DetectedClothingItemsSchema,
   OutfitSuggestionSchema,
 } from "@/lib/validations";
-import type { WardrobeItemMetadata, DetectedClothingItems, OutfitSuggestion } from "@/lib/validations";
+import type {
+  WardrobeItemMetadata,
+  DetectedClothingItems,
+  OutfitSuggestion,
+} from "@/lib/validations";
 import type { WardrobeItem, OutfitContext } from "@/types/wardrobe";
 
 // Initialize Gemini client
@@ -276,7 +280,9 @@ export const detectAllClothingItems = async (
 
     // Log image size for debugging
     const imageSizeKB = Math.round(base64Image.length / 1024);
-    console.log(`[Multi-Item Detection] Image size: ${imageSizeKB} KB (base64)`);
+    console.log(
+      `[Multi-Item Detection] Image size: ${imageSizeKB} KB (base64)`
+    );
 
     // Get file extension to determine MIME type
     const lowerUri = imageUri.toLowerCase();
@@ -289,32 +295,44 @@ export const detectAllClothingItems = async (
       mimeType = "image/webp";
     }
 
-    // Prompt for detecting ALL clothing items in the image
+    // Prompt for detecting ALL clothing items in the image with detailed attributes
     const prompt = `Analyze this image and identify ALL visible clothing items worn by the person or displayed.
 
-Return a JSON object with an "items" array containing each detected clothing item:
+Return a JSON object with an "items" array containing each detected clothing item with DETAILED attributes:
 {
   "items": [
     {
       "category": "Top/Bottom/Shoes/Accessories/Outerwear",
-      "subcategory": "Specific type (T-Shirt, Jeans, Sneakers, Watch, Jacket, etc.)",
+      "subcategory": "Specific type (Polo Shirt, Jeans, Sneakers, Watch, Bomber Jacket, etc.)",
       "color": "Primary color name",
-      "material": "Material/fabric type",
+      "material": "Material/fabric type (cotton, denim, leather, polyester, etc.)",
       "attributes": ["casual", "formal", "summer", "winter", "vintage", "sporty", etc.],
-      "gender": "male/female/unisex"
+      "gender": "male/female/unisex",
+      "sleeveLength": "short/long/sleeveless/3-4/cap (for tops/outerwear only)",
+      "fit": "slim/regular/relaxed/oversized/cropped",
+      "neckline": "crew/v-neck/polo/mock/turtleneck/scoop/henley/collar (for tops only)",
+      "pattern": "solid/striped/plaid/printed/graphic/checkered",
+      "length": "cropped/regular/long/mini/midi/maxi/ankle (for bottoms/dresses)"
     }
   ]
 }
 
-Important rules:
+CRITICAL RULES:
 - Return ONLY valid JSON, no markdown, no explanations
 - Detect EVERY distinct clothing item visible (e.g., jacket AND shirt AND pants = 3 items)
 - Category must be one of: Top, Bottom, Shoes, Accessories, Outerwear
 - Do NOT include the same item twice
-- If only one item is visible, still return it in the items array
-- Each item must have all fields: category, subcategory, color, material, attributes, gender
-- Be specific with subcategories (e.g., "Overshirt" not just "Shirt")
-- Gender should be "male" for traditionally masculine items, "female" for feminine, or "unisex" for neutral items`;
+- Each item must have ALL fields including the detailed attributes
+- Be VERY SPECIFIC with details - this data is used to generate accurate product images
+
+DETAILED ATTRIBUTE GUIDELINES:
+- sleeveLength: REQUIRED for tops/outerwear. "short" for t-shirts/polos, "long" for dress shirts/sweaters, "sleeveless" for tanks, "3-4" for 3/4 sleeves
+- fit: How the garment fits the body. "slim" for fitted, "regular" for standard, "oversized" for loose
+- neckline: REQUIRED for tops. "polo" for collared polo shirts, "crew" for round neck, "v-neck" for V-shaped
+- pattern: "solid" for single color, "striped" for stripes, "graphic" for prints/logos
+- length: For bottoms - "regular" for standard, "cropped" for above ankle, "ankle" for ankle length
+
+Gender: "male" for traditionally masculine, "female" for feminine, "unisex" for neutral items`;
 
     // Generate content with image
     const result = await model.generateContent([
@@ -348,12 +366,17 @@ Important rules:
     const validationResult = DetectedClothingItemsSchema.safeParse(parsedData);
 
     if (!validationResult.success) {
-      console.error("[Multi-Item Detection] Validation failed:", validationResult.error);
+      console.error(
+        "[Multi-Item Detection] Validation failed:",
+        validationResult.error
+      );
       console.error("Parsed data:", parsedData);
       return null;
     }
 
-    console.log(`[Multi-Item Detection] Found ${validationResult.data.items.length} items`);
+    console.log(
+      `[Multi-Item Detection] Found ${validationResult.data.items.length} items`
+    );
     return validationResult.data.items;
   } catch (error) {
     console.error("[Multi-Item Detection] Error:", error);
@@ -366,12 +389,16 @@ Important rules:
         error.message.includes("quota") ||
         error.message.includes("QUOTA")
       ) {
-        throw new Error("AI service is busy. Please wait a moment and try again.");
+        throw new Error(
+          "AI service is busy. Please wait a moment and try again."
+        );
       } else if (
         error.message.includes("network") ||
         error.message.includes("Network request failed")
       ) {
-        throw new Error("Network error. Please check your connection and try again.");
+        throw new Error(
+          "Network error. Please check your connection and try again."
+        );
       }
     }
 
@@ -419,22 +446,66 @@ export const generateCleanProductImage = async (
       mimeType = "image/webp";
     }
 
-    // Build a detailed prompt for studio-quality product shot
-    const prompt = `Based on this photo showing a ${itemMetadata.color} ${itemMetadata.subcategory}, generate a professional studio product photograph of ONLY this specific clothing item.
+    // Build detailed specifications from metadata
+    const specs = [];
+    if (itemMetadata.sleeveLength)
+      specs.push(`Sleeve length: ${itemMetadata.sleeveLength}`);
+    if (itemMetadata.fit) specs.push(`Fit: ${itemMetadata.fit}`);
+    if (itemMetadata.neckline) specs.push(`Neckline: ${itemMetadata.neckline}`);
+    if (itemMetadata.pattern) specs.push(`Pattern: ${itemMetadata.pattern}`);
+    if (itemMetadata.length) specs.push(`Length: ${itemMetadata.length}`);
+    const specificationsText =
+      specs.length > 0 ? specs.join("\n- ") : "as shown in reference";
 
-Requirements:
+    // Build a detailed prompt for studio-quality product shot with exact specifications
+    const prompt = `Generate a professional studio product photograph of ONLY this specific clothing item: ${
+      itemMetadata.color
+    } ${itemMetadata.subcategory}.
+
+EXACT GARMENT SPECIFICATIONS (MUST MATCH PRECISELY):
+- Color: ${itemMetadata.color}
+- Type: ${itemMetadata.subcategory} (${itemMetadata.category})
+- Material: ${itemMetadata.material}
+- ${specificationsText}
+
+CRITICAL ACCURACY REQUIREMENTS:
+${
+  itemMetadata.sleeveLength
+    ? `- SLEEVE LENGTH MUST BE ${itemMetadata.sleeveLength.toUpperCase()} - Do NOT change this`
+    : ""
+}
+${
+  itemMetadata.neckline
+    ? `- NECKLINE MUST BE ${itemMetadata.neckline.toUpperCase()} style - Do NOT change this`
+    : ""
+}
+${
+  itemMetadata.fit
+    ? `- FIT MUST BE ${itemMetadata.fit.toUpperCase()} - Do NOT change this`
+    : ""
+}
+${
+  itemMetadata.pattern
+    ? `- PATTERN MUST BE ${itemMetadata.pattern.toUpperCase()} - Do NOT change this`
+    : ""
+}
+
+PHOTOGRAPHY REQUIREMENTS:
 - Pure white background (#FFFFFF)
-- Professional e-commerce lighting (soft, even)
-- Item centered in frame
+- Professional e-commerce lighting (soft, even, no harsh shadows)
+- Item centered in frame, laid flat or naturally positioned
 - No model, mannequin, or person - just the isolated garment
-- High detail showing the ${itemMetadata.material} texture
+- High detail showing the ${itemMetadata.material} texture and construction
 - Clean, crisp product photography style like Zara or H&M catalog
-- The exact ${itemMetadata.color} color as shown in the reference
-- ${itemMetadata.subcategory} style matching the original
 
-Generate ONLY the clothing item, nothing else.`;
+Reference the attached image for the EXACT style, details, and construction of this ${
+      itemMetadata.subcategory
+    }.
+Generate ONLY the clothing item matching ALL specifications above.`;
 
-    console.log(`[Image Gen] Generating clean image for: ${itemMetadata.color} ${itemMetadata.subcategory}`);
+    console.log(
+      `[Image Gen] Generating clean image for: ${itemMetadata.color} ${itemMetadata.subcategory}`
+    );
 
     // Generate with image context
     const result = await model.generateContent([
@@ -475,7 +546,9 @@ Generate ONLY the clothing item, nothing else.`;
               encoding: EncodingType.Base64,
             });
 
-            console.log(`[Image Gen] Successfully generated: ${generatedImageUri}`);
+            console.log(
+              `[Image Gen] Successfully generated: ${generatedImageUri}`
+            );
             return generatedImageUri;
           }
         }
@@ -564,7 +637,9 @@ This is a fashion model reference photo for virtual clothing try-on. Maintain th
     const candidates = response.candidates;
 
     if (!candidates || candidates.length === 0) {
-      console.warn("[Personal Model] No candidates in response, returning original");
+      console.warn(
+        "[Personal Model] No candidates in response, returning original"
+      );
       return userPhotoUri;
     }
 
@@ -588,7 +663,9 @@ This is a fashion model reference photo for virtual clothing try-on. Maintain th
               encoding: EncodingType.Base64,
             });
 
-            console.log(`[Personal Model] Successfully generated: ${personalModelUri}`);
+            console.log(
+              `[Personal Model] Successfully generated: ${personalModelUri}`
+            );
             return personalModelUri;
           }
         }
@@ -596,7 +673,9 @@ This is a fashion model reference photo for virtual clothing try-on. Maintain th
     }
 
     // If no image was generated, fall back to original
-    console.warn("[Personal Model] No image data in response, returning original");
+    console.warn(
+      "[Personal Model] No image data in response, returning original"
+    );
     return userPhotoUri;
   } catch (error) {
     console.error("[Personal Model] Error generating personal model:", error);
@@ -625,7 +704,7 @@ export const generateOutfit = async (
       { apiVersion: "v1beta" }
     );
 
-    // Format wardrobe items for prompt
+    // Format wardrobe items for prompt with all details
     const itemsJSON = JSON.stringify(
       wardrobeItems.map((item) => ({
         id: item.id,
@@ -642,48 +721,51 @@ export const generateOutfit = async (
     const occasion = context.occasion || "casual";
     const weather = context.weather || "moderate";
 
-    // Group items by category for diversity check
-    const categories = [...new Set(wardrobeItems.map(i => i.category))];
-    const categoryInfo = categories.map(cat => {
-      const count = wardrobeItems.filter(i => i.category === cat).length;
-      return `${cat}: ${count} items`;
-    }).join(", ");
+    // Group items by category for context
+    const categories = [...new Set(wardrobeItems.map((i) => i.category))];
+    const categoryInfo = categories
+      .map((cat) => {
+        const count = wardrobeItems.filter((i) => i.category === cat).length;
+        return `${cat}: ${count} items`;
+      })
+      .join(", ");
 
-    const prompt = `Given this wardrobe:
+    const prompt = `You are a SEASONED FASHION STYLIST with 20+ years of experience styling celebrities, editorial shoots, and everyday clients. You have an exceptional eye for color coordination, proportions, and creating cohesive looks.
+
+CLIENT'S WARDROBE:
 ${itemsJSON}
 
-Available categories: ${categoryInfo}
+Available pieces: ${categoryInfo}
 
-Context:
+STYLING BRIEF:
 - Occasion: ${occasion}
 - Weather: ${weather}
 
-Create a COMPLETE outfit. Return ONLY valid JSON in this format:
+YOUR TASK:
+Create a KILLER outfit that would make this client look their absolute best. Use your expert judgment on how many pieces to include - sometimes less is more, sometimes layering is everything.
+
+Return ONLY valid JSON:
 {
-  "itemIds": ["uuid1", "uuid2", "uuid3", "uuid4"],
-  "suggestion": "Brief explanation of why these items work together (2-3 sentences)"
+  "itemIds": ["uuid1", "uuid2", ...],
+  "suggestion": "Your professional styling rationale - explain the look, color story, and why it works (2-3 sentences)",
+  "stylistNote": "One insider styling tip for how to wear this look (optional but appreciated)"
 }
 
-CRITICAL RULES FOR CATEGORY DIVERSITY:
-1. MUST include items from DIFFERENT categories to create a complete outfit
-2. A complete outfit typically includes: Top + Bottom + Shoes (minimum)
-3. If available, add Accessories or Outerwear for a polished look
-4. NEVER select multiple items from the same category (e.g., don't pick 2 tops)
-5. Prefer 3-5 items depending on what creates the most complete look
+STYLING PRINCIPLES (use your judgment):
+- A polished look can be 2-7 pieces depending on the vibe
+- Color harmony matters: complementary colors, monochromatic schemes, or intentional contrast
+- Occasion-appropriate: formal needs more structure, casual can be relaxed
+- Weather-smart: layer for cold, breathe for hot, prepare for rain
+- Balance proportions: oversized top with slim bottom, or vice versa
+- Accessories can make or break a look - use them wisely
+- Shoes complete the outfit - barefoot is not a look (unless it's the beach)
 
-Category Priority:
-- Top (shirt, t-shirt, blouse, sweater) - REQUIRED
-- Bottom (pants, jeans, skirt, shorts) - REQUIRED if not a dress
-- Shoes (sneakers, boots, heels, loafers) - STRONGLY PREFERRED
-- Outerwear (jacket, coat, blazer) - if weather is cool/cold/rainy
-- Accessories (watch, belt, bag, hat) - if available
+CONSTRAINTS:
+- Only use item IDs from the wardrobe above
+- Return valid JSON only, no markdown
+- Be creative but realistic - this should be wearable
 
-Important:
-- Return ONLY valid JSON, no markdown formatting
-- Item IDs must match IDs from the wardrobe array
-- Choose items that complement each other in color, style, and occasion
-- Consider the weather context for appropriate clothing
-- A well-dressed person needs shoes! Include them if available.`;
+Now style this client like you're prepping them for their best day yet.`;
 
     const result = await model.generateContent(prompt);
     const response = result.response;

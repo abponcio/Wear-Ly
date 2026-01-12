@@ -37,6 +37,7 @@ export interface OutfitContext {
 export interface OutfitSuggestion {
   itemIds: string[];
   suggestion: string;
+  stylistNote?: string; // Optional insider styling tip from the AI stylist
 }
 
 export interface Outfit {
