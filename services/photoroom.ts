@@ -2,7 +2,12 @@
  * Photoroom API service for background removal
  */
 
-import * as FileSystem from "expo-file-system";
+import {
+  readAsStringAsync,
+  writeAsStringAsync,
+  cacheDirectory,
+  EncodingType,
+} from "expo-file-system/legacy";
 
 const PHOTOROOM_API_URL = "https://sdk.photoroom.com/v1/segment";
 const PHOTOROOM_API_KEY = process.env.EXPO_PUBLIC_PHOTOROOM_API_KEY;
@@ -19,11 +24,6 @@ export const removeBackground = async (imageUri: string): Promise<string> => {
   }
 
   try {
-    // Read image file as base64
-    const base64Image = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
     // Determine MIME type from file extension
     const mimeType = imageUri.toLowerCase().endsWith(".png")
       ? "image/png"
@@ -74,11 +74,9 @@ export const removeBackground = async (imageUri: string): Promise<string> => {
     const base64Png = await base64Promise;
 
     // Save PNG to local filesystem
-    const isolatedImageUri = `${
-      FileSystem.cacheDirectory
-    }isolated_${Date.now()}.png`;
-    await FileSystem.writeAsStringAsync(isolatedImageUri, base64Png, {
-      encoding: FileSystem.EncodingType.Base64,
+    const isolatedImageUri = `${cacheDirectory}isolated_${Date.now()}.png`;
+    await writeAsStringAsync(isolatedImageUri, base64Png, {
+      encoding: EncodingType.Base64,
     });
 
     return isolatedImageUri;

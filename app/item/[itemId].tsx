@@ -120,7 +120,8 @@ export default function ItemDetailScreen() {
               source={{ uri: item.isolatedImageUrl || item.imageUrl }}
               contentFit="contain"
               transition={200}
-              className="w-full h-full"
+              style={{ width: '100%', height: '100%' }}
+              onError={(e) => console.log('Item detail image error:', e, item.isolatedImageUrl)}
             />
           </View>
         </View>

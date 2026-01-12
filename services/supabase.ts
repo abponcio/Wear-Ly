@@ -3,7 +3,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
-import * as FileSystem from "expo-file-system";
+import { readAsStringAsync, EncodingType } from "expo-file-system/legacy";
 import type { Database } from "@/types/database";
 import type {
   ItemInsert,
@@ -49,8 +49,8 @@ export const uploadImage = async (
 ): Promise<string> => {
   try {
     // Read image file
-    const base64Image = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
+    const base64Image = await readAsStringAsync(imageUri, {
+      encoding: EncodingType.Base64,
     });
 
     // Convert base64 to ArrayBuffer

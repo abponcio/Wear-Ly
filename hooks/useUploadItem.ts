@@ -15,6 +15,17 @@ import {
 } from "@/services/supabase";
 import type { WardrobeItem } from "@/types/wardrobe";
 
+/**
+ * Generate a UUID v4 (React Native compatible)
+ */
+const generateUUID = (): string => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export type UploadStep =
   | "idle"
   | "analyzing"
@@ -75,7 +86,7 @@ export const useUploadItem = (): UseUploadItemReturn => {
         console.log("Background removed, isolated image:", isolatedImageUri);
 
         // Step 4: Generate item ID
-        const itemId = crypto.randomUUID();
+        const itemId = generateUUID();
 
         // Step 5: Upload images to Supabase Storage
         setCurrentStep("uploading-images");

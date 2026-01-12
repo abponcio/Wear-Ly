@@ -10,6 +10,17 @@ export default function WardrobeScreen() {
   const router = useRouter();
   const { items, isLoading, error, refreshItems } = useWardrobe();
 
+  // Debug: Log items and their image URLs
+  React.useEffect(() => {
+    if (items.length > 0) {
+      console.log("Loaded items:", items.map(i => ({
+        id: i.id,
+        imageUrl: i.imageUrl,
+        isolatedImageUrl: i.isolatedImageUrl,
+      })));
+    }
+  }, [items]);
+
   const handleItemPress = (item: WardrobeItem) => {
     router.push(`/item/${item.id}`);
   };

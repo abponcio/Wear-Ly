@@ -20,7 +20,9 @@ export default function ItemCard({ item, onPress }: ItemCardProps) {
           source={{ uri: item.isolatedImageUrl || item.imageUrl }}
           contentFit="cover"
           transition={200}
-          className="w-full h-full"
+          style={{ width: '100%', height: '100%' }}
+          placeholder={require('@/assets/icon.png')}
+          onError={(e) => console.log('Image load error:', e, item.isolatedImageUrl)}
         />
       </View>
 

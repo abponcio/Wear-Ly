@@ -56,15 +56,17 @@ export default function UploadScreen() {
         result = await ImagePicker.launchCameraAsync({
           mediaTypes: ["images"],
           allowsEditing: true,
-          aspect: [3, 4],
-          quality: 0.8,
+          aspect: [3, 4], // Portrait aspect ratio for clothing
+          quality: 0.7,
+          exif: false,
         });
       } else {
         result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ["images"],
           allowsEditing: true,
-          aspect: [3, 4],
-          quality: 0.8,
+          aspect: [3, 4], // Portrait aspect ratio for clothing
+          quality: 0.7,
+          exif: false,
         });
       }
 
@@ -154,11 +156,11 @@ export default function UploadScreen() {
             </View>
           ) : (
             <View className="bg-white">
-              <View className="relative">
+              <View className="relative" style={{ width: '100%', aspectRatio: 1 }}>
                 <Image
                   source={{ uri: selectedImage }}
-                  contentFit="cover"
-                  className="w-full aspect-[3/4]"
+                  contentFit="contain"
+                  style={{ width: '100%', height: '100%', backgroundColor: '#F5F3F0' }}
                 />
                 <Pressable
                   onPress={clearSelection}

@@ -2,19 +2,50 @@
  * Gemini AI service for analyzing clothing items and generating outfit suggestions
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as FileSystem from 'expo-file-system';
-import { WardrobeItemMetadataSchema, OutfitSuggestionSchema } from '@/lib/validations';
-import type { WardrobeItemMetadata, OutfitSuggestion } from '@/lib/validations';
-import type { WardrobeItem, OutfitContext } from '@/types/wardrobe';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import {
+  readAsStringAsync,
+  EncodingType,
+  getInfoAsync,
+} from "expo-file-system/legacy";
+import {
+  WardrobeItemMetadataSchema,
+  OutfitSuggestionSchema,
+} from "@/lib/validations";
+import type { WardrobeItemMetadata, OutfitSuggestion } from "@/lib/validations";
+import type { WardrobeItem, OutfitContext } from "@/types/wardrobe";
 
 // Initialize Gemini client
 const getGeminiClient = () => {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is not set in environment variables');
+    throw new Error(
+      "EXPO_PUBLIC_GEMINI_API_KEY is not set in environment variables"
+    );
   }
+  console.log("Gemini API Key configured:", apiKey.substring(0, 8) + "...");
   return new GoogleGenerativeAI(apiKey);
+};
+
+/**
+ * Test Gemini API connection without image (for debugging)
+ */
+export const testGeminiConnection = async (): Promise<boolean> => {
+  try {
+    const genAI = getGeminiClient();
+    const model = genAI.getGenerativeModel(
+      { model: "gemini-2.0-flash" },
+      { apiVersion: "v1beta" }
+    );
+
+    const result = await model.generateContent("Say hello in one word");
+    const text = result.response.text();
+    console.log("Gemini test response:", text);
+    return true;
+  } catch (error) {
+    console.error("Gemini connection test failed:", error);
+    return false;
+  }
 };
 
 /**
@@ -27,19 +58,21 @@ const imageToBase64 = async (imageUri: string): Promise<string> => {
     let normalizedUri = imageUri;
 
     // Handle file:// prefix variations
-    if (!normalizedUri.startsWith('file://') && !normalizedUri.startsWith('http')) {
-      // If it's a relative path, try to read it as-is first
+    if (
+      !normalizedUri.startsWith("file://") &&
+      !normalizedUri.startsWith("http")
+    ) {
       normalizedUri = normalizedUri;
     }
 
     // Check if file exists first
-    const fileInfo = await FileSystem.getInfoAsync(normalizedUri);
+    const fileInfo = await getInfoAsync(normalizedUri);
 
     if (!fileInfo.exists) {
       // Try with file:// prefix
-      if (!normalizedUri.startsWith('file://')) {
+      if (!normalizedUri.startsWith("file://")) {
         normalizedUri = `file://${normalizedUri}`;
-        const retryInfo = await FileSystem.getInfoAsync(normalizedUri);
+        const retryInfo = await getInfoAsync(normalizedUri);
         if (!retryInfo.exists) {
           throw new Error(`Image file not found at: ${imageUri}`);
         }
@@ -48,19 +81,23 @@ const imageToBase64 = async (imageUri: string): Promise<string> => {
       }
     }
 
-    const base64 = await FileSystem.readAsStringAsync(normalizedUri, {
-      encoding: FileSystem.EncodingType.Base64,
+    const base64 = await readAsStringAsync(normalizedUri, {
+      encoding: EncodingType.Base64,
     });
 
     if (!base64 || base64.length === 0) {
-      throw new Error('Image file is empty');
+      throw new Error("Image file is empty");
     }
 
     return base64;
   } catch (error) {
-    console.error('Error converting image to base64:', error);
-    console.error('Image URI:', imageUri);
-    throw new Error(`Failed to read image file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error("Error converting image to base64:", error);
+    console.error("Image URI:", imageUri);
+    throw new Error(
+      `Failed to read image file: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
   }
 };
 
@@ -93,15 +130,34 @@ export const processImageWithGemini = async (
 ): Promise<WardrobeItemMetadata | null> => {
   try {
     const genAI = getGeminiClient();
-    // Use gemini-1.5-pro for image analysis (supports images)
-    // If this fails, try: 'gemini-pro-vision' or check available models
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    // Use gemini-2.0-flash for image analysis (multimodal capable)
+    const model = genAI.getGenerativeModel(
+      { model: "gemini-2.0-flash" },
+      { apiVersion: "v1beta" }
+    );
 
     // Convert image to base64
     const base64Image = await imageToBase64(imageUri);
 
+    // Log image size for debugging
+    const imageSizeKB = Math.round(base64Image.length / 1024);
+    console.log(`Image size: ${imageSizeKB} KB (base64)`);
+
+    // Warn if image is very large (over 4MB base64 = ~3MB actual)
+    if (base64Image.length > 4 * 1024 * 1024) {
+      console.warn("Image is very large, may cause network issues");
+    }
+
     // Get file extension to determine MIME type
-    const mimeType = imageUri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+    const lowerUri = imageUri.toLowerCase();
+    let mimeType = "image/jpeg";
+    if (lowerUri.endsWith(".png")) {
+      mimeType = "image/png";
+    } else if (lowerUri.endsWith(".heic") || lowerUri.endsWith(".heif")) {
+      mimeType = "image/heic";
+    } else if (lowerUri.endsWith(".webp")) {
+      mimeType = "image/webp";
+    }
 
     // Create structured prompt for clothing analysis
     const prompt = `Analyze this clothing item image and return a JSON object with the following structure:
@@ -143,8 +199,8 @@ Important:
     try {
       parsedData = JSON.parse(jsonString);
     } catch (parseError) {
-      console.error('Failed to parse JSON from Gemini response:', parseError);
-      console.error('Response text:', text);
+      console.error("Failed to parse JSON from Gemini response:", parseError);
+      console.error("Response text:", text);
       return null;
     }
 
@@ -152,23 +208,37 @@ Important:
     const validationResult = WardrobeItemMetadataSchema.safeParse(parsedData);
 
     if (!validationResult.success) {
-      console.error('Validation failed:', validationResult.error);
-      console.error('Parsed data:', parsedData);
+      console.error("Validation failed:", validationResult.error);
+      console.error("Parsed data:", parsedData);
       return null;
     }
 
     return validationResult.data;
   } catch (error) {
-    console.error('Error processing image with Gemini:', error);
+    console.error("Error processing image with Gemini:", error);
 
-    // Handle specific error types
+    // Handle specific error types and rethrow with user-friendly message
     if (error instanceof Error) {
-      if (error.message.includes('API_KEY')) {
-        console.error('Invalid or missing Gemini API key');
-      } else if (error.message.includes('QUOTA')) {
-        console.error('Gemini API quota exceeded');
-      } else if (error.message.includes('network') || error.message.includes('fetch')) {
-        console.error('Network error connecting to Gemini API');
+      if (error.message.includes("API_KEY")) {
+        console.error("Invalid or missing Gemini API key");
+        throw new Error("API configuration error. Please check your API key.");
+      } else if (
+        error.message.includes("429") ||
+        error.message.includes("quota") ||
+        error.message.includes("QUOTA")
+      ) {
+        console.error("Gemini API quota exceeded");
+        throw new Error(
+          "AI service is busy. Please wait a moment and try again."
+        );
+      } else if (
+        error.message.includes("network") ||
+        error.message.includes("Network request failed")
+      ) {
+        console.error("Network error connecting to Gemini API");
+        throw new Error(
+          "Network error. Please check your connection and try again."
+        );
       }
     }
 
@@ -188,8 +258,11 @@ export const generateOutfit = async (
 ): Promise<OutfitSuggestion | null> => {
   try {
     const genAI = getGeminiClient();
-    // Use gemini-pro for outfit generation
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    // Use gemini-2.0-flash for outfit generation
+    const model = genAI.getGenerativeModel(
+      { model: "gemini-2.0-flash" },
+      { apiVersion: "v1beta" }
+    );
 
     // Format wardrobe items for prompt
     const itemsJSON = JSON.stringify(
@@ -205,8 +278,8 @@ export const generateOutfit = async (
       2
     );
 
-    const occasion = context.occasion || 'casual';
-    const weather = context.weather || 'moderate';
+    const occasion = context.occasion || "casual";
+    const weather = context.weather || "moderate";
 
     const prompt = `Given this wardrobe:
 ${itemsJSON}
@@ -240,8 +313,8 @@ Important:
     try {
       parsedData = JSON.parse(jsonString);
     } catch (parseError) {
-      console.error('Failed to parse JSON from Gemini response:', parseError);
-      console.error('Response text:', text);
+      console.error("Failed to parse JSON from Gemini response:", parseError);
+      console.error("Response text:", text);
       return null;
     }
 
@@ -249,20 +322,20 @@ Important:
     const validationResult = OutfitSuggestionSchema.safeParse(parsedData);
 
     if (!validationResult.success) {
-      console.error('Validation failed:', validationResult.error);
-      console.error('Parsed data:', parsedData);
+      console.error("Validation failed:", validationResult.error);
+      console.error("Parsed data:", parsedData);
       return null;
     }
 
     return validationResult.data;
   } catch (error) {
-    console.error('Error generating outfit with Gemini:', error);
+    console.error("Error generating outfit with Gemini:", error);
 
     if (error instanceof Error) {
-      if (error.message.includes('API_KEY')) {
-        console.error('Invalid or missing Gemini API key');
-      } else if (error.message.includes('QUOTA')) {
-        console.error('Gemini API quota exceeded');
+      if (error.message.includes("API_KEY")) {
+        console.error("Invalid or missing Gemini API key");
+      } else if (error.message.includes("QUOTA")) {
+        console.error("Gemini API quota exceeded");
       }
     }
 
