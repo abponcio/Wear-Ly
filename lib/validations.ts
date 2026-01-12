@@ -19,13 +19,14 @@ export const WardrobeItemMetadataSchema = z.object({
   color: z.string().min(1, 'Color is required'),
   material: z.string().min(1, 'Material is required'),
   attributes: z.array(z.string()).default([]),
-  gender: GenderSchema.optional().default('unisex'),
+  gender: GenderSchema.nullable().optional().default('unisex'),
   // Detailed garment attributes for accurate image generation
-  sleeveLength: z.string().optional(), // "short", "long", "sleeveless", "3/4", "cap"
-  fit: z.string().optional(), // "slim", "regular", "relaxed", "oversized", "cropped"
-  neckline: z.string().optional(), // "crew", "v-neck", "polo", "mock", "turtleneck", "scoop", "henley"
-  pattern: z.string().optional(), // "solid", "striped", "plaid", "printed", "graphic", "checkered"
-  length: z.string().optional(), // "cropped", "regular", "long", "mini", "midi", "maxi", "ankle"
+  // Using .nullable() because Gemini returns null for non-applicable attributes (e.g., sleeveLength for pants)
+  sleeveLength: z.string().nullable().optional(), // "short", "long", "sleeveless", "3/4", "cap"
+  fit: z.string().nullable().optional(), // "slim", "regular", "relaxed", "oversized", "cropped"
+  neckline: z.string().nullable().optional(), // "crew", "v-neck", "polo", "mock", "turtleneck", "scoop", "henley"
+  pattern: z.string().nullable().optional(), // "solid", "striped", "plaid", "printed", "graphic", "checkered"
+  length: z.string().nullable().optional(), // "cropped", "regular", "long", "mini", "midi", "maxi", "ankle"
 });
 
 /**

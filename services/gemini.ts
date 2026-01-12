@@ -420,10 +420,10 @@ export const generateCleanProductImage = async (
   try {
     const genAI = getGeminiClient();
 
-    // Use gemini-2.0-flash-exp for image generation (experimental model with image output)
+    // Use gemini-3-pro-image-preview for better quality image generation
     const model = genAI.getGenerativeModel(
       {
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-3-pro-image-preview",
         generationConfig: {
           // @ts-ignore - responseModalities is supported in v2 API but not in types yet
           responseModalities: ["TEXT", "IMAGE"],
@@ -579,10 +579,10 @@ export const generatePersonalModel = async (
   try {
     const genAI = getGeminiClient();
 
-    // Use gemini-2.0-flash-exp for image generation
+    // Use gemini-3-pro-image-preview for better quality image generation
     const model = genAI.getGenerativeModel(
       {
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-3-pro-image-preview",
         generationConfig: {
           // @ts-ignore - responseModalities is supported in v2 API but not in types yet
           responseModalities: ["TEXT", "IMAGE"],
